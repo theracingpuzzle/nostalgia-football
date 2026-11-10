@@ -453,3 +453,28 @@ present them as confirmed" problem this plan is trying to avoid.
 that's a good moment to pause and answer open question #5 above first — worth
 confirming the squad-list columns before building more UI around a shape that
 might need to change.
+
+## Recent changes (mobile pitch orientation, transfer windows, state bug fix)
+
+- **Team Selection pitch on mobile is now portrait** (goal-top, positions
+  stacked GK→DEF→MID→FWD down the page, goal-bottom) instead of the old
+  horizontal strip. Desktop/landscape view is unchanged (left-to-right pitch).
+  Pure CSS breakpoint split (`md:` Tailwind classes), no logic change.
+- **Added a deliberately silly, lightweight transfer window** — one before the
+  season and one around matchday 20 ("January", since fixtures are only
+  numbered 1-38, not dated — this is an approximate marker, not a real
+  calendar). No fees, no wages, no negotiation: a few straight-swap offers
+  (one of your spare squad players for a same-position player from a random
+  other club) with jokey tabloid-style flavor text, Accept/Decline per offer.
+  This is **not** a recreation of how the original's transfer market worked —
+  that mechanic is still unknown/unconfirmed — it's a fun placeholder feature
+  the user asked for, flagged as such on-screen.
+- **Fixed a real pre-existing bug**: the Team Selection screen's drag-and-drop
+  XI was being wiped back to empty after every match played. Root cause: the
+  career screen was conditionally *replacing* its whole render tree with an
+  overlay screen (match result, now also transfer window) instead of layering
+  the overlay on top — which fully unmounted the persistent Team Selection
+  component and lost its internal state. Fixed by always rendering the full
+  tree and showing overlays as a sibling layer on top. Verified across a
+  19-match run (pre-season window → MD1-19 played with real varying
+  results → January window trigger) that the XI count stays intact throughout.

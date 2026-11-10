@@ -164,8 +164,8 @@ export function MatchAnimationScreen({
         <div className="pointer-events-none absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/60" />
         <div className="pointer-events-none absolute left-0 top-1/2 h-44 w-16 -translate-y-1/2 border-2 border-l-0 border-white/60" />
         <div className="pointer-events-none absolute right-0 top-1/2 h-44 w-16 -translate-y-1/2 border-2 border-r-0 border-white/60" />
-        <GoalFrame side="left" height={70} />
-        <GoalFrame side="right" height={70} />
+        <GoalFrame side="left" size={70} />
+        <GoalFrame side="right" size={70} />
 
         {dots.map((d) => (
           <div

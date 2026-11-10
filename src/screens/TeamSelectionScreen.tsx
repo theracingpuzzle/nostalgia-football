@@ -238,20 +238,45 @@ export function TeamSelectionScreen({
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_210px]">
             <Panel title={`Pitch (${formation.name}) — drag players to rearrange`} accentColor={primaryColor}>
-              <div className="relative overflow-hidden rounded-sm border-4 border-white bg-pitch" style={{ height: 300 }}>
-                <div className="pointer-events-none absolute inset-y-0 left-1/2 border-l-2 border-white/60" />
-                <div className="pointer-events-none absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/60" />
-                <div className="pointer-events-none absolute left-0 top-1/2 h-36 w-14 -translate-y-1/2 border-2 border-l-0 border-white/60" />
-                <div className="pointer-events-none absolute right-0 top-1/2 h-36 w-14 -translate-y-1/2 border-2 border-r-0 border-white/60" />
-                <GoalFrame side="left" height={56} />
-                <GoalFrame side="right" height={56} />
+              {/*
+                Portrait (down the page) on mobile for usability, landscape
+                (left-to-right, matching the real reference screenshot) from
+                md up. Two full sets of decorations rather than trying to
+                make one set orientation-agnostic via breakpoint overrides —
+                more lines, much less fragile.
+              */}
+              <div className="relative overflow-hidden rounded-sm border-4 border-white bg-pitch h-[460px] md:h-[300px]">
+                {/* Portrait decorations */}
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t-2 border-white/60 md:hidden" />
+                <div className="pointer-events-none absolute left-1/2 top-0 h-12 w-40 -translate-x-1/2 border-2 border-t-0 border-white/60 md:hidden" />
+                <div className="pointer-events-none absolute bottom-0 left-1/2 h-12 w-40 -translate-x-1/2 border-2 border-b-0 border-white/60 md:hidden" />
+                <div className="md:hidden">
+                  <GoalFrame side="top" size={56} />
+                </div>
+                <div className="md:hidden">
+                  <GoalFrame side="bottom" size={56} />
+                </div>
 
-                <div className="relative flex h-full items-stretch justify-between gap-1 px-5 py-3">
+                {/* Landscape decorations */}
+                <div className="pointer-events-none absolute inset-y-0 left-1/2 hidden border-l-2 border-white/60 md:block" />
+                <div className="pointer-events-none absolute left-0 top-1/2 hidden h-36 w-14 -translate-y-1/2 border-2 border-l-0 border-white/60 md:block" />
+                <div className="pointer-events-none absolute right-0 top-1/2 hidden h-36 w-14 -translate-y-1/2 border-2 border-r-0 border-white/60 md:block" />
+                <div className="hidden md:block">
+                  <GoalFrame side="left" size={56} />
+                </div>
+                <div className="hidden md:block">
+                  <GoalFrame side="right" size={56} />
+                </div>
+
+                {/* Center circle — same shape either orientation */}
+                <div className="pointer-events-none absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/60" />
+
+                <div className="relative flex h-full flex-col items-stretch justify-between gap-1 px-3 py-3 md:flex-row md:px-5">
                   {COLUMN_ORDER.map((position) => {
                     const columnSlots = slots.filter((s) => s.position === position);
                     if (columnSlots.length === 0) return null;
                     return (
-                      <div key={position} className="flex flex-1 flex-col items-center justify-center gap-2">
+                      <div key={position} className="flex flex-1 flex-row flex-wrap items-center justify-center gap-2 md:flex-col">
                         {columnSlots.map((slot) => (
                           <PitchSlotView
                             key={slot.id}
