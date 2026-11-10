@@ -45,7 +45,17 @@ function computeTopScorers(fixtures: Fixture[]): ScorerTotal[] {
  * (still-unknown) match mechanics. That's flagged on the result screen too,
  * not just buried in a comment.
  */
-export function CareerScreen({ club, squad, onChangeClub }: { club: ClubListing; squad: Player[]; onChangeClub: () => void }) {
+export function CareerScreen({
+  club,
+  squad,
+  managerName,
+  onChangeClub,
+}: {
+  club: ClubListing;
+  squad: Player[];
+  managerName: string;
+  onChangeClub: () => void;
+}) {
   const [screen, setScreen] = useState<CareerScreenId>('team');
   const [formationId, setFormationId] = useState(DEFAULT_FORMATION_ID);
   const [selectedXI, setSelectedXI] = useState<string[]>([]);
@@ -124,7 +134,7 @@ export function CareerScreen({ club, squad, onChangeClub }: { club: ClubListing;
 
   return (
     <div>
-      <CareerNav club={club} screen={screen} onNavigate={setScreen} onChangeClub={onChangeClub} />
+      <CareerNav club={club} managerName={managerName} screen={screen} onNavigate={setScreen} onChangeClub={onChangeClub} />
 
       <div hidden={screen !== 'team'}>
         <TeamSelectionScreen

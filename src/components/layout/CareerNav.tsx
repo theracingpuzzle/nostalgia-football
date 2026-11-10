@@ -57,11 +57,13 @@ function NavButtons({
 
 export function CareerNav({
   club,
+  managerName,
   screen,
   onNavigate,
   onChangeClub,
 }: {
   club: ClubListing;
+  managerName: string;
   screen: CareerScreenId;
   onNavigate: (screen: CareerScreenId) => void;
   onChangeClub: () => void;
@@ -74,9 +76,14 @@ export function CareerNav({
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <ClubCrest primaryColor={club.primaryColor} secondaryColor={club.secondaryColor} label={club.shortName} crestPath={club.crestPath} size={30} />
-          <span className="truncate text-base font-bold uppercase tracking-wider" style={{ color: textColor }}>
-            {club.name}
-          </span>
+          <div className="min-w-0 leading-tight">
+            <span className="block truncate text-base font-bold uppercase tracking-wider" style={{ color: textColor }}>
+              {club.name}
+            </span>
+            <span className="block truncate text-[11px] font-semibold" style={{ color: textColor, opacity: 0.75 }}>
+              Managed by {managerName}
+            </span>
+          </div>
         </div>
 
         {/* Desktop nav */}

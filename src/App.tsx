@@ -2,24 +2,44 @@ import { useState } from 'react';
 import { Panel } from './components/ui/Panel';
 import { ClubListScreen } from './screens/ClubListScreen';
 import { CareerScreen } from './screens/CareerScreen';
+import { ManagerNameScreen } from './screens/ManagerNameScreen';
+import { TitleScreen } from './screens/TitleScreen';
 import { SQUADS_BY_CLUB_ID } from './data/clubSquads';
 import { PREMIER_LEAGUE_2008_09 } from './data/premierLeague0809';
 
+type Stage = 'title' | 'managerName' | 'clubSelect' | { kind: 'career'; clubId: string };
+
 function App() {
-  const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
+  const [stage, setStage] = useState<Stage>('title');
+  const [managerName, setManagerName] = useState('');
+
+  if (stage === 'title') {
+    return <TitleScreen onNewCareer={() => setStage('managerName')} />;
+  }
+
+  if (stage === 'managerName') {
+    return (
+      <ManagerNameScreen
+        onContinue={(name) => {
+          setManagerName(name);
+          setStage('clubSelect');
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-pitch">
-      {!selectedClubId ? (
-        <ClubListScreen onSelectClub={setSelectedClubId} />
+      {stage === 'clubSelect' ? (
+        <ClubListScreen onSelectClub={(clubId) => setStage({ kind: 'career', clubId })} />
       ) : (
-        <ClubRoute clubId={selectedClubId} onChangeClub={() => setSelectedClubId(null)} />
+        <ClubRoute clubId={stage.clubId} managerName={managerName} onChangeClub={() => setStage('clubSelect')} />
       )}
     </div>
   );
 }
 
-function ClubRoute({ clubId, onChangeClub }: { clubId: string; onChangeClub: () => void }) {
+function ClubRoute({ clubId, managerName, onChangeClub }: { clubId: string; managerName: string; onChangeClub: () => void }) {
   const club = PREMIER_LEAGUE_2008_09.find((c) => c.id === clubId);
   const squad = SQUADS_BY_CLUB_ID[clubId];
 
@@ -39,7 +59,7 @@ function ClubRoute({ clubId, onChangeClub }: { clubId: string; onChangeClub: () 
   }
 
   // key={club.id} forces a fresh CareerScreen (and its fixtures/table/XI state) whenever the club changes.
-  return <CareerScreen key={club.id} club={club} squad={squad} onChangeClub={onChangeClub} />;
+  return <CareerScreen key={club.id} club={club} squad={squad} managerName={managerName} onChangeClub={onChangeClub} />;
 }
 
 export default App;
