@@ -115,6 +115,12 @@ export function TeamSelectionScreen({
     const formation = FORMATIONS.find((f) => f.id === DEFAULT_FORMATION_ID) ?? FORMATIONS[0];
     return buildEmptySlots(formation);
   });
+  // Tap-to-place: an alternative to drag-and-drop for mobile, where dragging
+  // is fiddly. Tap a player (pitch, subs, or squad), then tap a destination
+  // (a pitch slot, or another player to swap with). Reuses the exact same
+  // dropOnSlot/dropOnBench logic as drag-and-drop below — this is just a
+  // second way to trigger it.
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   const formation = FORMATIONS.find((f) => f.id === formationId) ?? FORMATIONS[0];
   const contrastText = getContrastTextColor(primaryColor);
@@ -171,16 +177,53 @@ export function TeamSelectionScreen({
     setSlots((prev) => prev.map((s) => (s.playerId === playerId ? { ...s, playerId: null } : s)));
   }
 
+  /**
+   * Tap-to-place dispatcher. `playerId` is the player tapped (if any);
+   * `slotId` is set only when a pitch slot itself was tapped. First tap with
+   * nothing selected just selects a player. A second tap on the same player
+   * deselects. A second tap on a pitch slot moves the selected player there
+   * (dropOnSlot already handles swapping whoever was there back out). A
+   * second tap on another squad/bench row either swaps them in for a
+   * selected pitch player, or — if the selection was already a bench player
+   * too — just switches the selection.
+   */
+  function handleTap(playerId: string | null, slotId: string | null) {
+    if (selectedPlayerId === null) {
+      if (playerId) setSelectedPlayerId(playerId);
+      return;
+    }
+    if (playerId === selectedPlayerId) {
+      setSelectedPlayerId(null);
+      return;
+    }
+    if (slotId) {
+      dropOnSlot(selectedPlayerId, slotId);
+      setSelectedPlayerId(null);
+      return;
+    }
+    if (playerId) {
+      const selectedSlot = slots.find((s) => s.playerId === selectedPlayerId);
+      if (selectedSlot) {
+        dropOnSlot(playerId, selectedSlot.id);
+        setSelectedPlayerId(null);
+      } else {
+        setSelectedPlayerId(playerId);
+      }
+    }
+  }
+
   const filledCount = slots.filter((s) => s.playerId !== null).length;
 
   return (
     <div className="mx-auto max-w-6xl p-3 text-white">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-xl font-black uppercase tracking-wide">
-          <ClubCrest primaryColor={primaryColor} secondaryColor={secondaryColor} label={clubShortName} crestPath={crestPath} size={34} />
-          {clubName} — Team Selection
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-1.5 text-base font-black uppercase tracking-wide md:gap-2 md:text-xl">
+          <ClubCrest primaryColor={primaryColor} secondaryColor={secondaryColor} label={clubShortName} crestPath={crestPath} size={28} />
+          <span className="truncate">{clubName} — Team Selection</span>
         </h2>
-        <span className={`rounded-sm border-2 px-2.5 py-1.5 text-sm font-bold ${filledCount === 11 ? 'border-green-300 bg-green-800' : 'border-amber-300 bg-amber-800'}`}>
+        <span
+          className={`shrink-0 whitespace-nowrap rounded-sm border-2 px-2 py-1 text-xs font-bold md:px-2.5 md:py-1.5 md:text-sm ${filledCount === 11 ? 'border-green-300 bg-green-800' : 'border-amber-300 bg-amber-800'}`}
+        >
           Starting XI: {filledCount} / 11
         </span>
       </div>
@@ -237,7 +280,7 @@ export function TeamSelectionScreen({
         {/* Main area */}
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_210px]">
-            <Panel title={`Pitch (${formation.name}) — drag players to rearrange`} accentColor={primaryColor}>
+            <Panel title={`Pitch (${formation.name}) — drag, or tap a player then tap a slot`} accentColor={primaryColor}>
               {/*
                 Portrait (down the page) on mobile for usability, landscape
                 (left-to-right, matching the real reference screenshot) from
@@ -276,17 +319,22 @@ export function TeamSelectionScreen({
                     const columnSlots = slots.filter((s) => s.position === position);
                     if (columnSlots.length === 0) return null;
                     return (
-                      <div key={position} className="flex flex-1 flex-row flex-wrap items-center justify-center gap-2 md:flex-col">
-                        {columnSlots.map((slot) => (
-                          <PitchSlotView
-                            key={slot.id}
-                            slot={slot}
-                            player={slot.playerId ? (playersById.get(slot.playerId) ?? null) : null}
-                            primaryColor={primaryColor}
-                            secondaryColor={secondaryColor}
-                            onDropPlayer={(playerId) => dropOnSlot(playerId, slot.id)}
-                          />
-                        ))}
+                      <div key={position} className="flex flex-1 flex-row items-stretch justify-center gap-1 md:flex-col md:items-center md:gap-2">
+                        {columnSlots.map((slot) => {
+                          const player = slot.playerId ? (playersById.get(slot.playerId) ?? null) : null;
+                          return (
+                            <PitchSlotView
+                              key={slot.id}
+                              slot={slot}
+                              player={player}
+                              primaryColor={primaryColor}
+                              secondaryColor={secondaryColor}
+                              isSelected={player?.id === selectedPlayerId}
+                              onDropPlayer={(playerId) => dropOnSlot(playerId, slot.id)}
+                              onTap={() => handleTap(player?.id ?? null, slot.id)}
+                            />
+                          );
+                        })}
                       </div>
                     );
                   })}
@@ -305,7 +353,7 @@ export function TeamSelectionScreen({
                 }}
               >
                 {substitutes.map((p) => (
-                  <DraggableRow key={p.id} player={p} />
+                  <DraggableRow key={p.id} player={p} isSelected={p.id === selectedPlayerId} onTap={() => handleTap(p.id, null)} />
                 ))}
               </ul>
             </Panel>
@@ -322,7 +370,16 @@ export function TeamSelectionScreen({
             >
               {squad.map((p) => {
                 const inXI = xiIds.has(p.id);
-                return <DraggableRow key={p.id} player={p} highlight={inXI} highlightColor={primaryColor} />;
+                return (
+                  <DraggableRow
+                    key={p.id}
+                    player={p}
+                    highlight={inXI}
+                    highlightColor={primaryColor}
+                    isSelected={p.id === selectedPlayerId}
+                    onTap={() => handleTap(p.id, null)}
+                  />
+                );
               })}
             </ul>
           </Panel>
@@ -336,20 +393,25 @@ function DraggableRow({
   player,
   highlight,
   highlightColor,
+  isSelected,
+  onTap,
 }: {
   player: Player;
   highlight?: boolean;
   highlightColor?: string;
+  isSelected?: boolean;
+  onTap?: () => void;
 }) {
   return (
     <li
       draggable={!player.injured}
       onDragStart={(e) => e.dataTransfer.setData('text/plain', player.id)}
+      onClick={player.injured ? undefined : onTap}
       className={`flex items-center justify-between rounded-sm border-2 px-2 py-1.5 ${
         player.injured
           ? 'cursor-not-allowed border-pink-400 bg-pink-200 text-pink-900'
           : `cursor-grab active:cursor-grabbing bg-white/70 text-ink ${highlight ? 'font-bold' : 'border-ink/20'}`
-      }`}
+      } ${isSelected ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}
       style={highlight && !player.injured && highlightColor ? { borderColor: highlightColor } : undefined}
     >
       <span>{player.name}</span>
@@ -363,15 +425,20 @@ function PitchSlotView({
   player,
   primaryColor,
   secondaryColor,
+  isSelected,
   onDropPlayer,
+  onTap,
 }: {
   slot: Slot;
   player: Player | null;
   primaryColor: string;
   secondaryColor: string;
+  isSelected?: boolean;
   onDropPlayer: (playerId: string) => void;
+  onTap?: () => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
+  const selectedRing = isSelected ? 'ring-2 ring-yellow-400 ring-offset-1 ring-offset-pitch' : '';
 
   return (
     <div
@@ -385,20 +452,30 @@ function PitchSlotView({
         setDragOver(false);
         onDropPlayer(e.dataTransfer.getData('text/plain'));
       }}
-      className={`flex flex-col items-center rounded-sm ${dragOver ? 'ring-2 ring-white ring-offset-1 ring-offset-pitch' : ''}`}
+      onClick={onTap}
+      /*
+       * flex-1/basis-0/min-w-0 (mobile only) make every slot in a position
+       * row shrink or grow to divide the row's width equally — so a row of
+       * 4 defenders always renders as 4 uniform cards on one line, matching
+       * the formation shape, rather than wrapping onto a second row. The
+       * max-w-[110px] ceiling keeps a lone slot (e.g. the goalkeeper) from
+       * stretching to the full row width. Desktop (md:) reverts to the
+       * original fixed-size column stack, unchanged.
+       */
+      className={`flex flex-1 basis-0 min-w-0 max-w-[110px] flex-col items-center rounded-sm md:flex-none ${dragOver ? 'ring-2 ring-white ring-offset-1 ring-offset-pitch' : selectedRing}`}
     >
       {player ? (
         <div
           draggable
           onDragStart={(e) => e.dataTransfer.setData('text/plain', player.id)}
-          className="w-full max-w-[110px] cursor-grab break-words rounded-sm border-2 px-2 py-1 text-center text-sm font-bold leading-tight shadow-[1px_1px_0_rgba(0,0,0,0.4)] active:cursor-grabbing"
+          className="w-full cursor-grab break-words rounded-sm border-2 px-1 py-1 text-center text-[11px] font-bold leading-tight shadow-[1px_1px_0_rgba(0,0,0,0.4)] active:cursor-grabbing md:px-2 md:text-sm"
           style={{ backgroundColor: primaryColor, borderColor: secondaryColor, color: getContrastTextColor(primaryColor) }}
         >
           {player.name}
-          <div className="text-[10px] font-normal opacity-70">{player.position}</div>
+          <div className="text-[8px] font-normal opacity-70 md:text-[10px]">{player.position}</div>
         </div>
       ) : (
-        <div className="w-full max-w-[110px] rounded-sm border-2 border-dashed border-white/50 px-3 py-1.5 text-center text-xs font-bold uppercase text-white/60">
+        <div className="w-full rounded-sm border-2 border-dashed border-white/50 px-1 py-1 text-center text-[10px] font-bold uppercase text-white/60 md:px-3 md:py-1.5 md:text-xs">
           {slot.position}
           <div className="font-normal normal-case">empty</div>
         </div>
