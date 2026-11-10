@@ -11,6 +11,8 @@ import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
  * one, so that path is dormant but kept for when a club's data is ever
  * pulled for rework.
  */
+const CLUBS_ALPHABETICAL = [...PREMIER_LEAGUE_2008_09].sort((a, b) => a.name.localeCompare(b.name));
+
 export function ClubListScreen({ onSelectClub }: { onSelectClub: (clubId: string) => void }) {
   return (
     <div className="mx-auto max-w-3xl p-4 text-white">
@@ -22,7 +24,7 @@ export function ClubListScreen({ onSelectClub }: { onSelectClub: (clubId: string
           placeholders (see PLAN.md).
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {PREMIER_LEAGUE_2008_09.map((club) => {
+          {CLUBS_ALPHABETICAL.map((club) => {
             const hasSquad = Boolean(SQUADS_BY_CLUB_ID[club.id]);
             return (
               <button
