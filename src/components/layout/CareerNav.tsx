@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ClubCrest } from '../ui/ClubCrest';
 import { getContrastTextColor } from '../../utils/colorContrast';
+import { getLeagueZone, ordinal, ZONE_STYLES } from '../../utils/leagueZones';
 import type { ClubListing } from '../../data/premierLeague0809';
 
 export type CareerScreenId = 'team' | 'fixtures' | 'table' | 'scorers';
@@ -59,17 +60,23 @@ export function CareerNav({
   club,
   managerName,
   screen,
+  leaguePosition,
+  totalClubs,
   onNavigate,
   onChangeClub,
 }: {
   club: ClubListing;
   managerName: string;
   screen: CareerScreenId;
+  /** Current league position (1-based), so the manager can see it without switching to the Table tab. */
+  leaguePosition: number;
+  totalClubs: number;
   onNavigate: (screen: CareerScreenId) => void;
   onChangeClub: () => void;
 }) {
   const textColor = getContrastTextColor(club.primaryColor);
   const [menuOpen, setMenuOpen] = useState(false);
+  const zone = getLeagueZone(leaguePosition, totalClubs);
 
   return (
     <div className="relative border-b-2 border-black/30 px-3 py-2" style={{ backgroundColor: club.primaryColor }}>
@@ -84,6 +91,15 @@ export function CareerNav({
               Managed by {managerName}
             </span>
           </div>
+          <button
+            onClick={() => onNavigate('table')}
+            className="flex shrink-0 items-center gap-1.5 rounded-sm border-2 px-2 py-1 text-xs font-bold"
+            style={{ borderColor: 'rgba(255,255,255,0.4)', color: textColor, backgroundColor: 'rgba(255,255,255,0.15)' }}
+            title={zone ? ZONE_STYLES[zone].label : 'League position'}
+          >
+            <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${zone ? ZONE_STYLES[zone].dot : 'bg-white/60'}`} />
+            {ordinal(leaguePosition)}
+          </button>
         </div>
 
         {/* Desktop nav */}

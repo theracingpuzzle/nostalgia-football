@@ -141,6 +141,7 @@ export function CareerScreen({
   const table = useMemo(() => computeLeagueTable(ALL_CLUB_IDS, fixtures), [fixtures]);
   const topScorers = useMemo(() => computeTopScorers(fixtures).slice(0, 20), [fixtures]);
   const lastFixture = lastPlayedFixtureId ? fixtures.find((f) => f.id === lastPlayedFixtureId) ?? null : null;
+  const leaguePosition = table.findIndex((r) => r.clubId === club.id) + 1;
 
   function openTransferWindow(which: 'preseason' | 'january') {
     setTransferOffers(generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
@@ -255,7 +256,15 @@ export function CareerScreen({
 
   return (
     <div>
-      <CareerNav club={club} managerName={managerName} screen={screen} onNavigate={setScreen} onChangeClub={onChangeClub} />
+      <CareerNav
+        club={club}
+        managerName={managerName}
+        screen={screen}
+        leaguePosition={leaguePosition}
+        totalClubs={ALL_CLUB_IDS.length}
+        onNavigate={setScreen}
+        onChangeClub={onChangeClub}
+      />
 
       <div hidden={screen !== 'team'}>
         <TeamSelectionScreen
