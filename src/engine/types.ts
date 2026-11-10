@@ -81,6 +81,9 @@ export interface MatchResult {
   events: MatchEvent[];
   homeScorers: Scorer[];
   awayScorers: Scorer[];
+  /** Player ids who started this match for each side — needed to rate/credit everyone, not just scorers. */
+  homeXI: string[];
+  awayXI: string[];
   seed: number;
 }
 

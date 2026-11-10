@@ -4,13 +4,14 @@ import { getContrastTextColor } from '../../utils/colorContrast';
 import { getLeagueZone, ordinal, ZONE_STYLES } from '../../utils/leagueZones';
 import type { ClubListing } from '../../data/premierLeague0809';
 
-export type CareerScreenId = 'team' | 'fixtures' | 'table' | 'scorers';
+export type CareerScreenId = 'team' | 'fixtures' | 'table' | 'scorers' | 'totm';
 
 const NAV_ITEMS: { screen: CareerScreenId; label: string }[] = [
   { screen: 'team', label: 'Team Selection' },
   { screen: 'fixtures', label: 'Fixtures' },
   { screen: 'table', label: 'Table' },
   { screen: 'scorers', label: 'Scorers' },
+  { screen: 'totm', label: 'TOTM' },
 ];
 
 /** Nav buttons, shared between the desktop row and the mobile dropdown — same markup, different layout wrapper. */

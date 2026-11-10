@@ -5,3 +5,4 @@ export * from './teamStrength';
 export * from './matchSimulator';
 export * from './league';
 export * from './squadAuto';
+export * from './ratings';

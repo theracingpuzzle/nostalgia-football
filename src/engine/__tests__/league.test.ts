@@ -42,7 +42,7 @@ describe('computeLeagueTable', () => {
       homeClubId: home,
       awayClubId: away,
       played: true,
-      result: { fixtureId: id, homeGoals, awayGoals, events: [], homeScorers: [], awayScorers: [], seed: 1 },
+      result: { fixtureId: id, homeGoals, awayGoals, events: [], homeScorers: [], awayScorers: [], homeXI: [], awayXI: [], seed: 1 },
     };
   }
 

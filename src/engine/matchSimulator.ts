@@ -82,6 +82,8 @@ export function simulateMatch({ fixtureId, home, away, seed, applyHomeAdvantage 
     events,
     homeScorers: [...homeGoalMinutes.values()],
     awayScorers: [...awayGoalMinutes.values()],
+    homeXI: home.selectedXI.map((p) => p.id),
+    awayXI: away.selectedXI.map((p) => p.id),
     seed,
   };
 }

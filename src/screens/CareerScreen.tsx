@@ -11,6 +11,7 @@ import { LeagueTableScreen } from './LeagueTableScreen';
 import { MatchAnimationScreen } from './MatchAnimationScreen';
 import { MatchResultScreen } from './MatchResultScreen';
 import { ScorersScreen, type ScorerTotal } from './ScorersScreen';
+import { TeamOfTheMonthScreen } from './TeamOfTheMonthScreen';
 import { TeamSelectionScreen } from './TeamSelectionScreen';
 import { TransferWindowScreen, type TransferOffer } from './TransferWindowScreen';
 
@@ -289,6 +290,8 @@ export function CareerScreen({
       {screen === 'table' && <LeagueTableScreen table={table} managedClubId={club.id} />}
 
       {screen === 'scorers' && <ScorersScreen scorers={topScorers} managedClubId={club.id} />}
+
+      {screen === 'totm' && <TeamOfTheMonthScreen fixtures={fixtures} allSquads={allSquads} managedClubId={club.id} />}
 
       {overlay && <div className="fixed inset-0 z-50 overflow-y-auto bg-pitch">{overlay}</div>}
     </div>

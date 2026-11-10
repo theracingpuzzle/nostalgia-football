@@ -478,3 +478,36 @@ might need to change.
   tree and showing overlays as a sibling layer on top. Verified across a
   19-match run (pre-season window → MD1-19 played with real varying
   results → January window trigger) that the XI count stays intact throughout.
+
+## Team of the Month (new addition, not a reconstruction)
+
+Added at the user's request. The original almost certainly never had this —
+it's a new feature, same spirit as the transfer window: fun, flagged as an
+addition, not a faithfulness claim.
+
+- **Player ratings**: `engine/ratings.ts` adds a lightweight, deterministic
+  post-match rating out of 10 for every player who started a match (not just
+  scorers — `MatchResult` now also stores `homeXI`/`awayXI`, the player ids
+  who played, so everyone can be rated). The formula: base 6.0, + win/draw/
+  loss, + clean sheet / − goals conceded for keepers and defenders, +1 per
+  goal scored by that player, a small nudge from the player's own relevant
+  attribute (so stronger players edge out ties), and a bit of deterministic
+  per-match variance (hashed from fixture id + player id, so re-viewing the
+  same match always gives the same numbers — no hidden simulated events like
+  tackles or passes behind it).
+- **Team of the Month screen**: league-wide (not just your club), picks a
+  fixed 1-4-3-3 shape per block of matchdays, ranked by average rating with
+  goals scored weighted in on top (per the user's "realistic, based on goals
+  scored" ask). Month navigation with prev/next; opens on the latest month
+  with any played fixtures.
+- **"Month" boundaries**: same approximation style as the January transfer
+  window — fixtures are only numbered 1-38, so `data/seasonMonths.ts` chunks
+  them into blocks under real Aug-May month names purely for labeling. It's
+  a separate approximation from `JANUARY_MATCHDAY` in CareerScreen.tsx and
+  deliberately isn't forced to line up with it exactly.
+- **Known approximation**: a player who's since been transferred is looked
+  up across every club's *current* squad (not the fixture's two clubs), so
+  they're still found and credited correctly — but the club crest shown next
+  to their name is wherever they are *now*, not necessarily who they played
+  for in that past match. Minor, and only visible once a player has actually
+  moved mid-season.
