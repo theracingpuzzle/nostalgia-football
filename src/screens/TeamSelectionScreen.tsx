@@ -366,14 +366,14 @@ function PitchSlotView({
         <div
           draggable
           onDragStart={(e) => e.dataTransfer.setData('text/plain', player.id)}
-          className="cursor-grab rounded-sm border-2 px-2 py-1 text-center text-sm font-bold leading-tight shadow-[1px_1px_0_rgba(0,0,0,0.4)] active:cursor-grabbing"
+          className="w-full max-w-[110px] cursor-grab break-words rounded-sm border-2 px-2 py-1 text-center text-sm font-bold leading-tight shadow-[1px_1px_0_rgba(0,0,0,0.4)] active:cursor-grabbing"
           style={{ backgroundColor: primaryColor, borderColor: secondaryColor, color: getContrastTextColor(primaryColor) }}
         >
           {player.name}
           <div className="text-[10px] font-normal opacity-70">{player.position}</div>
         </div>
       ) : (
-        <div className="rounded-sm border-2 border-dashed border-white/50 px-3 py-1.5 text-center text-xs font-bold uppercase text-white/60">
+        <div className="w-full max-w-[110px] rounded-sm border-2 border-dashed border-white/50 px-3 py-1.5 text-center text-xs font-bold uppercase text-white/60">
           {slot.position}
           <div className="font-normal normal-case">empty</div>
         </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ClubCrest } from '../ui/ClubCrest';
 import { getContrastTextColor } from '../../utils/colorContrast';
 import type { ClubListing } from '../../data/premierLeague0809';
@@ -11,6 +12,49 @@ const NAV_ITEMS: { screen: CareerScreenId; label: string }[] = [
   { screen: 'scorers', label: 'Scorers' },
 ];
 
+/** Nav buttons, shared between the desktop row and the mobile dropdown — same markup, different layout wrapper. */
+function NavButtons({
+  screen,
+  club,
+  textColor,
+  vertical,
+  onNavigate,
+  onChangeClub,
+}: {
+  screen: CareerScreenId;
+  club: ClubListing;
+  textColor: string;
+  vertical: boolean;
+  onNavigate: (screen: CareerScreenId) => void;
+  onChangeClub: () => void;
+}) {
+  return (
+    <>
+      {NAV_ITEMS.map((item) => (
+        <button
+          key={item.screen}
+          onClick={() => onNavigate(item.screen)}
+          className={`rounded-sm border-2 px-3 py-1.5 text-sm font-bold uppercase tracking-wide transition ${vertical ? 'w-full text-left' : ''}`}
+          style={
+            screen === item.screen
+              ? { borderColor: club.secondaryColor, backgroundColor: 'rgba(255,255,255,0.25)', color: textColor }
+              : { borderColor: 'transparent', color: textColor, opacity: 0.8 }
+          }
+        >
+          {item.label}
+        </button>
+      ))}
+      <button
+        onClick={onChangeClub}
+        className={`rounded-sm border-2 border-transparent px-3 py-1.5 text-sm font-bold uppercase tracking-wide underline ${vertical ? 'w-full text-left' : ''}`}
+        style={{ color: textColor, opacity: 0.8 }}
+      >
+        Change Club
+      </button>
+    </>
+  );
+}
+
 export function CareerNav({
   club,
   screen,
@@ -23,34 +67,56 @@ export function CareerNav({
   onChangeClub: () => void;
 }) {
   const textColor = getContrastTextColor(club.primaryColor);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="flex items-center justify-between gap-2 border-b-2 border-black/30 px-3 py-2" style={{ backgroundColor: club.primaryColor }}>
-      <div className="flex items-center gap-2">
-        <ClubCrest primaryColor={club.primaryColor} secondaryColor={club.secondaryColor} label={club.shortName} crestPath={club.crestPath} size={30} />
-        <span className="text-base font-bold uppercase tracking-wider" style={{ color: textColor }}>
-          {club.name}
-        </span>
-      </div>
-      <nav className="flex items-center gap-1">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.screen}
-            onClick={() => onNavigate(item.screen)}
-            className="rounded-sm border-2 px-3 py-1.5 text-sm font-bold uppercase tracking-wide transition"
-            style={
-              screen === item.screen
-                ? { borderColor: club.secondaryColor, backgroundColor: 'rgba(255,255,255,0.25)', color: textColor }
-                : { borderColor: 'transparent', color: textColor, opacity: 0.8 }
-            }
-          >
-            {item.label}
-          </button>
-        ))}
-        <button onClick={onChangeClub} className="rounded-sm border-2 border-transparent px-3 py-1.5 text-sm font-bold uppercase tracking-wide underline" style={{ color: textColor, opacity: 0.8 }}>
-          Change Club
+    <div className="relative border-b-2 border-black/30 px-3 py-2" style={{ backgroundColor: club.primaryColor }}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <ClubCrest primaryColor={club.primaryColor} secondaryColor={club.secondaryColor} label={club.shortName} crestPath={club.crestPath} size={30} />
+          <span className="truncate text-base font-bold uppercase tracking-wider" style={{ color: textColor }}>
+            {club.name}
+          </span>
+        </div>
+
+        {/* Desktop nav */}
+        <nav className="hidden shrink-0 items-center gap-1 md:flex">
+          <NavButtons screen={screen} club={club} textColor={textColor} vertical={false} onNavigate={onNavigate} onChangeClub={onChangeClub} />
+        </nav>
+
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          className="shrink-0 rounded-sm border-2 border-transparent p-1.5 md:hidden"
+          style={{ color: textColor }}
+        >
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            {menuOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M3 6h18M3 12h18M3 18h18" />}
+          </svg>
         </button>
-      </nav>
+      </div>
+
+      {/* Mobile dropdown */}
+      {menuOpen && (
+        <nav className="mt-2 flex flex-col gap-1 border-t-2 border-black/20 pt-2 md:hidden">
+          <NavButtons
+            screen={screen}
+            club={club}
+            textColor={textColor}
+            vertical
+            onNavigate={(s) => {
+              onNavigate(s);
+              setMenuOpen(false);
+            }}
+            onChangeClub={() => {
+              onChangeClub();
+              setMenuOpen(false);
+            }}
+          />
+        </nav>
+      )}
     </div>
   );
 }
