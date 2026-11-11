@@ -3,14 +3,14 @@ import { Button } from '../components/ui/Button';
 import { FormationXIPitch } from '../components/ui/FormationXIPitch';
 import { Panel } from '../components/ui/Panel';
 import { FORMATIONS } from '../data/formations';
-import { SEASON_MONTHS } from '../data/seasonMonths';
+import { buildSeasonMonths, type SeasonMonth } from '../data/seasonMonths';
 import { computeMonthlyPlayerStats, pickTeamOfTheMonth } from '../engine';
 import type { Fixture, Player } from '../engine/types';
 
 /** Last month index with at least one played fixture, so the screen opens on real data rather than an empty future month. */
-function latestMonthWithData(fixtures: Fixture[]): number {
-  for (let i = SEASON_MONTHS.length - 1; i >= 0; i--) {
-    const { matchdayStart, matchdayEnd } = SEASON_MONTHS[i];
+function latestMonthWithData(fixtures: Fixture[], seasonMonths: SeasonMonth[]): number {
+  for (let i = seasonMonths.length - 1; i >= 0; i--) {
+    const { matchdayStart, matchdayEnd } = seasonMonths[i];
     if (fixtures.some((f) => f.played && f.matchday >= matchdayStart && f.matchday <= matchdayEnd)) return i;
   }
   return 0;
@@ -25,9 +25,21 @@ function latestMonthWithData(fixtures: Fixture[]): number {
  * on top. Flagged here the same way the transfer window is — a fun
  * addition, not a faithfulness claim.
  */
-export function TeamOfTheMonthScreen({ fixtures, allSquads, managedClubId }: { fixtures: Fixture[]; allSquads: Record<string, Player[]>; managedClubId: string }) {
-  const [monthIndex, setMonthIndex] = useState(() => latestMonthWithData(fixtures));
-  const month = SEASON_MONTHS[monthIndex];
+export function TeamOfTheMonthScreen({
+  fixtures,
+  totalMatchdays,
+  allSquads,
+  managedClubId,
+}: {
+  fixtures: Fixture[];
+  /** ((clubCount - 1) * 2) for the managed league — drives month boundaries, not always 38. */
+  totalMatchdays: number;
+  allSquads: Record<string, Player[]>;
+  managedClubId: string;
+}) {
+  const seasonMonths = useMemo(() => buildSeasonMonths(totalMatchdays), [totalMatchdays]);
+  const [monthIndex, setMonthIndex] = useState(() => latestMonthWithData(fixtures, seasonMonths));
+  const month = seasonMonths[monthIndex];
 
   const playerIndex = useMemo(() => {
     const map = new Map<string, { player: Player; clubId: string }>();
@@ -56,7 +68,7 @@ export function TeamOfTheMonthScreen({ fixtures, allSquads, managedClubId }: { f
         <span className="min-w-[180px] text-center text-base font-bold uppercase tracking-wide">
           {month.name} <span className="font-normal text-white/60">(MD{month.matchdayStart}-{month.matchdayEnd})</span>
         </span>
-        <Button variant="secondary" disabled={monthIndex === SEASON_MONTHS.length - 1} onClick={() => setMonthIndex((i) => Math.min(SEASON_MONTHS.length - 1, i + 1))}>
+        <Button variant="secondary" disabled={monthIndex === seasonMonths.length - 1} onClick={() => setMonthIndex((i) => Math.min(seasonMonths.length - 1, i + 1))}>
           ▶
         </Button>
       </div>

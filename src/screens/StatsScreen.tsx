@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
-import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
+import { ALL_CLUBS } from '../data/leagues';
 
 export interface PlayerSeasonTotal {
   playerId: string;
@@ -62,7 +62,7 @@ export function StatsScreen({ stats, managedClubId }: { stats: PlayerSeasonTotal
               </thead>
               <tbody>
                 {sorted.slice(0, 20).map((s, i) => {
-                  const club = PREMIER_LEAGUE_2008_09.find((c) => c.id === s.clubId);
+                  const club = ALL_CLUBS.find((c) => c.id === s.clubId);
                   const isManaged = s.clubId === managedClubId;
                   return (
                     <tr key={s.playerId} className={`border-b border-ink/10 ${i % 2 === 0 ? 'bg-white/60' : 'bg-white/30'} ${isManaged ? 'bg-pitch-light/40 font-bold' : ''}`}>

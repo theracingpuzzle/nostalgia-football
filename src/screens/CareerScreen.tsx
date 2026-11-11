@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CareerNav, type CareerScreenId } from '../components/layout/CareerNav';
 import { SQUADS_BY_CLUB_ID } from '../data/clubSquads';
 import { DEFAULT_FORMATION_ID, FORMATIONS } from '../data/formations';
+import { ALL_CLUBS, LEAGUES, getLeagueForClub } from '../data/leagues';
 import type { ClubListing } from '../data/premierLeague0809';
-import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
 import { applyInjuryUpdates, computeLeagueTable, computeMonthlyPlayerStats, createRandom, generateFixtures, pickBestXI, simulateMatch } from '../engine';
 import type { Fixture, MatchResult, Player, TeamMatchInput } from '../engine/types';
 import { FixturesScreen } from './FixturesScreen';
@@ -23,11 +23,7 @@ import {
 } from './TransferWindowScreen';
 import { saveCareer, type CareerSaveData } from '../utils/careerStorage';
 
-const ALL_CLUB_IDS = PREMIER_LEAGUE_2008_09.map((c) => c.id);
 const AI_FORMATION = FORMATIONS.find((f) => f.id === DEFAULT_FORMATION_ID) ?? FORMATIONS[0];
-// Fixtures aren't dated, just numbered 1-38 — this is an approximate "roughly
-// where January falls in an Aug-May season" marker, not a real calendar.
-const JANUARY_MATCHDAY = 20;
 
 const TRANSFER_FLAVOR_TEMPLATES: ((out: string, inP: string, inClub: string) => string)[] = [
   (out, inP, inClub) => `Dressing room gossip: ${out} fancies a change of scenery. ${inClub} will send ${inP} the other way.`,
@@ -56,12 +52,16 @@ const TRANSFER_NEWS_TEMPLATES: ((outName: string, outClub: string, inName: strin
  */
 function simulateLeagueTransferActivity(
   allSquads: Record<string, Player[]>,
+  leagueClubIds: string[],
   excludeClubId: string,
   count: number,
 ): { updatedSquads: Record<string, Player[]>; news: { text: string; clubIds: [string, string] }[] } {
   const next = cloneSquads(allSquads);
   const news: { text: string; clubIds: [string, string] }[] = [];
-  const otherClubIds = Object.keys(next).filter((id) => id !== excludeClubId);
+  // Scoped to the managed club's OWN league — otherwise, once squads from
+  // multiple leagues share one allSquads map, this would swap/rumor
+  // players across leagues, which shouldn't be possible.
+  const otherClubIds = leagueClubIds.filter((id) => id !== excludeClubId);
   const usedPlayerIds = new Set<string>();
 
   for (let i = 0; i < count; i++) {
@@ -91,8 +91,8 @@ function simulateLeagueTransferActivity(
     next[sellingClubId] = next[sellingClubId].filter((p) => p.id !== outPlayer.id).concat(picked.inPlayer);
     next[picked.buyingClubId] = next[picked.buyingClubId].filter((p) => p.id !== picked.inPlayer.id).concat(outPlayer);
 
-    const sellingName = PREMIER_LEAGUE_2008_09.find((c) => c.id === sellingClubId)?.shortName ?? sellingClubId;
-    const buyingName = PREMIER_LEAGUE_2008_09.find((c) => c.id === picked.buyingClubId)?.shortName ?? picked.buyingClubId;
+    const sellingName = ALL_CLUBS.find((c) => c.id === sellingClubId)?.shortName ?? sellingClubId;
+    const buyingName = ALL_CLUBS.find((c) => c.id === picked.buyingClubId)?.shortName ?? picked.buyingClubId;
     const template = TRANSFER_NEWS_TEMPLATES[Math.floor(Math.random() * TRANSFER_NEWS_TEMPLATES.length)];
     news.push({ text: template(outPlayer.name, sellingName, picked.inPlayer.name, buyingName), clubIds: [sellingClubId, picked.buyingClubId] });
   }
@@ -117,10 +117,11 @@ const TRANSFER_RUMOUR_TEMPLATES: ((playerName: string, playerClub: string, inter
  */
 function simulateLeagueRumours(
   allSquads: Record<string, Player[]>,
+  leagueClubIds: string[],
   excludeClubId: string,
   count: number,
 ): { text: string; clubIds: [string, string] }[] {
-  const otherClubIds = Object.keys(allSquads).filter((id) => id !== excludeClubId);
+  const otherClubIds = leagueClubIds.filter((id) => id !== excludeClubId);
   const rumours: { text: string; clubIds: [string, string] }[] = [];
 
   for (let i = 0; i < count; i++) {
@@ -133,8 +134,8 @@ function simulateLeagueRumours(
     if (interestedCandidates.length === 0) continue;
     const interestedClubId = interestedCandidates[Math.floor(Math.random() * interestedCandidates.length)];
 
-    const playerClubName = PREMIER_LEAGUE_2008_09.find((c) => c.id === playerClubId)?.shortName ?? playerClubId;
-    const interestedClubName = PREMIER_LEAGUE_2008_09.find((c) => c.id === interestedClubId)?.shortName ?? interestedClubId;
+    const playerClubName = ALL_CLUBS.find((c) => c.id === playerClubId)?.shortName ?? playerClubId;
+    const interestedClubName = ALL_CLUBS.find((c) => c.id === interestedClubId)?.shortName ?? interestedClubId;
     const template = TRANSFER_RUMOUR_TEMPLATES[Math.floor(Math.random() * TRANSFER_RUMOUR_TEMPLATES.length)];
     rumours.push({ text: template(player.name, playerClubName, interestedClubName), clubIds: [playerClubId, interestedClubId] });
   }
@@ -224,10 +225,10 @@ function computeSeasonStats(fixtures: Fixture[]): PlayerSeasonTotal[] {
   return [...totals.values()].sort((a, b) => b.goals - a.goals);
 }
 
-/** Picks a handful of silly straight-swap offers: one of your reserves for a same-position player from a random other club. Not a transfer market simulation — just flavor. */
-function generateTransferOffers(managedClubId: string, allSquads: Record<string, Player[]>, protectedIds: Set<string>, count = 3): TransferOffer[] {
+/** Picks a handful of silly straight-swap offers: one of your reserves for a same-position player from a random other club (within the managed club's own league). Not a transfer market simulation — just flavor. */
+function generateTransferOffers(managedClubId: string, leagueClubIds: string[], allSquads: Record<string, Player[]>, protectedIds: Set<string>, count = 3): TransferOffer[] {
   const managedSquad = allSquads[managedClubId] ?? [];
-  const otherClubIds = Object.keys(allSquads).filter((id) => id !== managedClubId);
+  const otherClubIds = leagueClubIds.filter((id) => id !== managedClubId);
 
   const outCandidates = managedSquad.filter(
     (p) => !protectedIds.has(p.id) && managedSquad.filter((q) => q.position === p.position).length > 1,
@@ -252,7 +253,7 @@ function generateTransferOffers(managedClubId: string, allSquads: Record<string,
     if (!picked) continue;
 
     usedInPlayerIds.add(picked.inPlayer.id);
-    const inClubName = PREMIER_LEAGUE_2008_09.find((c) => c.id === picked.inClubId)?.name ?? picked.inClubId;
+    const inClubName = ALL_CLUBS.find((c) => c.id === picked.inClubId)?.name ?? picked.inClubId;
     const template = TRANSFER_FLAVOR_TEMPLATES[Math.floor(Math.random() * TRANSFER_FLAVOR_TEMPLATES.length)];
 
     offers.push({
@@ -319,6 +320,19 @@ export function CareerScreen({
 }) {
   const resume = initialSave && initialSave.clubId === club.id ? initialSave : undefined;
 
+  // Which league this club belongs to — drives the club list this season
+  // is played within (fixtures, table, transfers all stay inside it) and
+  // the season length (a league with fewer clubs plays fewer matchdays).
+  // Falls back to the first registered league only as a defensive
+  // fallback; every real club here was picked from LEAGUES in the first
+  // place, so getLeagueForClub should never actually miss.
+  const league = getLeagueForClub(club.id) ?? LEAGUES[0];
+  const ALL_CLUB_IDS = useMemo(() => league.clubs.map((c) => c.id), [league]);
+  const totalMatchdays = (ALL_CLUB_IDS.length - 1) * 2;
+  // Fixtures aren't dated, just numbered 1-N — this is an approximate
+  // "roughly halfway through the season" marker, not a real calendar.
+  const januaryMatchday = Math.ceil(totalMatchdays / 2);
+
   const [screen, setScreen] = useState<CareerScreenId>(resume?.screen ?? 'team');
 
   // Switching tabs (or landing back on Team Selection after a match) should
@@ -360,8 +374,8 @@ export function CareerScreen({
   const initialTransferNewsRef = useRef<{ text: string; confirmed: boolean; clubIds: [string, string] }[]>([]);
   const [allSquads, setAllSquads] = useState<Record<string, Player[]>>(() => {
     if (resume) return resume.allSquads;
-    const { updatedSquads, news } = simulateLeagueTransferActivity(cloneSquads(SQUADS_BY_CLUB_ID), club.id, 5);
-    const rumours = simulateLeagueRumours(updatedSquads, club.id, 4);
+    const { updatedSquads, news } = simulateLeagueTransferActivity(cloneSquads(SQUADS_BY_CLUB_ID), ALL_CLUB_IDS, club.id, 5);
+    const rumours = simulateLeagueRumours(updatedSquads, ALL_CLUB_IDS, club.id, 4);
     initialTransferNewsRef.current = [
       ...news.map((n) => ({ ...n, confirmed: true })),
       ...rumours.map((r) => ({ ...r, confirmed: false })),
@@ -370,7 +384,7 @@ export function CareerScreen({
   });
   const [transferWindow, setTransferWindow] = useState<'preseason' | 'january' | null>(resume ? resume.transferWindow : 'preseason');
   const [januaryWindowShown, setJanuaryWindowShown] = useState(resume?.januaryWindowShown ?? false);
-  const [transferOffers, setTransferOffers] = useState<TransferOffer[]>(() => resume?.transferOffers ?? generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
+  const [transferOffers, setTransferOffers] = useState<TransferOffer[]>(() => resume?.transferOffers ?? generateTransferOffers(club.id, ALL_CLUB_IDS, allSquads, new Set(selectedXI)));
   const [transferTimeline, setTransferTimeline] = useState<TransferTimelineEntry[]>(
     () => resume?.transferTimeline ?? scheduleTransferTimeline(initialTransferNewsRef.current, transferOffers),
   );
@@ -386,6 +400,7 @@ export function CareerScreen({
   useEffect(() => {
     saveCareer({
       clubId: club.id,
+      leagueId: league.id,
       managerName,
       screen,
       formationId,
@@ -402,6 +417,7 @@ export function CareerScreen({
     });
   }, [
     club.id,
+    league.id,
     managerName,
     screen,
     formationId,
@@ -418,7 +434,7 @@ export function CareerScreen({
   ]);
 
   const liveSquad = allSquads[club.id] ?? squad;
-  const table = useMemo(() => computeLeagueTable(ALL_CLUB_IDS, fixtures), [fixtures]);
+  const table = useMemo(() => computeLeagueTable(ALL_CLUB_IDS, fixtures), [ALL_CLUB_IDS, fixtures]);
   const leagueSeasonTotals = useMemo(() => computeSeasonStats(fixtures), [fixtures]);
   const topScorers = useMemo(() => leagueSeasonTotals.slice(0, 20), [leagueSeasonTotals]);
   const lastFixture = lastPlayedFixtureId ? fixtures.find((f) => f.id === lastPlayedFixtureId) ?? null : null;
@@ -436,14 +452,14 @@ export function CareerScreen({
   const managedClubGamesPlayed = table.find((r) => r.clubId === club.id)?.played ?? 0;
   const managedClubSeasonStats = useMemo(() => {
     const clubFixtures = fixtures.filter((f) => f.homeClubId === club.id || f.awayClubId === club.id);
-    const stats = computeMonthlyPlayerStats(clubFixtures, 1, 38, (id) => allPlayerIndex.get(id));
+    const stats = computeMonthlyPlayerStats(clubFixtures, 1, totalMatchdays, (id) => allPlayerIndex.get(id));
     return new Map(stats.map((s) => [s.playerId, s]));
-  }, [fixtures, club.id, allPlayerIndex]);
+  }, [fixtures, club.id, allPlayerIndex, totalMatchdays]);
 
   function openTransferWindow(which: 'preseason' | 'january') {
-    const { updatedSquads, news } = simulateLeagueTransferActivity(allSquads, club.id, 5);
-    const rumours = simulateLeagueRumours(updatedSquads, club.id, 4);
-    const offers = generateTransferOffers(club.id, updatedSquads, new Set(selectedXI));
+    const { updatedSquads, news } = simulateLeagueTransferActivity(allSquads, ALL_CLUB_IDS, club.id, 5);
+    const rumours = simulateLeagueRumours(updatedSquads, ALL_CLUB_IDS, club.id, 4);
+    const offers = generateTransferOffers(club.id, ALL_CLUB_IDS, updatedSquads, new Set(selectedXI));
     const combinedNews = [...news.map((n) => ({ ...n, confirmed: true })), ...rumours.map((r) => ({ ...r, confirmed: false }))];
     setAllSquads(updatedSquads);
     setTransferOffers(offers);
@@ -482,7 +498,7 @@ export function CareerScreen({
 
     const matchday = Math.min(...unplayed.map((f) => f.matchday));
 
-    if (matchday >= JANUARY_MATCHDAY && !januaryWindowShown) {
+    if (matchday >= januaryMatchday && !januaryWindowShown) {
       setJanuaryWindowShown(true);
       openTransferWindow('january');
       return;
@@ -502,8 +518,8 @@ export function CareerScreen({
       const isManagedHome = fixture.homeClubId === club.id;
       const isManagedAway = fixture.awayClubId === club.id;
 
-      const homeListing = PREMIER_LEAGUE_2008_09.find((c) => c.id === fixture.homeClubId);
-      const awayListing = PREMIER_LEAGUE_2008_09.find((c) => c.id === fixture.awayClubId);
+      const homeListing = ALL_CLUBS.find((c) => c.id === fixture.homeClubId);
+      const awayListing = ALL_CLUBS.find((c) => c.id === fixture.awayClubId);
       const homeSquad = isManagedHome ? liveSquad : allSquads[fixture.homeClubId];
       const awaySquad = isManagedAway ? liveSquad : allSquads[fixture.awayClubId];
       if (!homeListing || !awayListing || !homeSquad || !awaySquad) continue;
@@ -636,8 +652,8 @@ export function CareerScreen({
       />
     );
   } else if (lastFixture) {
-    const homeClub = PREMIER_LEAGUE_2008_09.find((c) => c.id === lastFixture.homeClubId);
-    const awayClub = PREMIER_LEAGUE_2008_09.find((c) => c.id === lastFixture.awayClubId);
+    const homeClub = ALL_CLUBS.find((c) => c.id === lastFixture.homeClubId);
+    const awayClub = ALL_CLUBS.find((c) => c.id === lastFixture.awayClubId);
     if (showingAnimation && liveMatch && liveMatch.fixtureId === lastFixture.id && homeClub && awayClub) {
       overlay = (
         <MatchAnimationScreen
@@ -670,6 +686,7 @@ export function CareerScreen({
     overlay = (
       <SeasonSummaryScreen
         club={club}
+        leagueName={league.name}
         leagueRow={table.find((r) => r.clubId === club.id)}
         leaguePosition={leaguePosition}
         totalClubs={ALL_CLUB_IDS.length}
@@ -716,6 +733,7 @@ export function CareerScreen({
         <FixturesScreen
           managedClubId={club.id}
           fixtures={fixtures}
+          totalMatchdays={totalMatchdays}
           xiReady={selectedXI.length === 11}
           onPlayNext={playNextFixture}
           onViewSeasonSummary={seasonComplete ? () => setSeasonSummaryDismissed(false) : undefined}
@@ -728,7 +746,7 @@ export function CareerScreen({
 
       {screen === 'stats' && <StatsScreen stats={leagueSeasonTotals} managedClubId={club.id} />}
 
-      {screen === 'totm' && <TeamOfTheMonthScreen fixtures={fixtures} allSquads={allSquads} managedClubId={club.id} />}
+      {screen === 'totm' && <TeamOfTheMonthScreen fixtures={fixtures} totalMatchdays={totalMatchdays} allSquads={allSquads} managedClubId={club.id} />}
 
       {overlay && <div className="fixed inset-0 z-50 overflow-y-auto bg-pitch">{overlay}</div>}
     </div>

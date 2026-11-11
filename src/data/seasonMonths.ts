@@ -4,23 +4,32 @@ export interface SeasonMonth {
   matchdayEnd: number;
 }
 
+const MONTH_NAMES = ['August', 'September', 'October', 'November', 'December', 'January', 'February', 'March', 'April', 'May'];
+
 /**
- * Fixtures aren't dated, just numbered 1-38 (same approximation the January
- * transfer window uses — see JANUARY_MATCHDAY in CareerScreen.tsx). This
- * chunks the season into blocks under real Aug-May Premier League month
- * names purely so "Team of the Month" has something to label itself with —
- * it's not a real calendar and the two approximations aren't meant to line
- * up exactly.
+ * Fixtures aren't dated, just numbered 1-N — this chunks the season into
+ * blocks under real Aug-May month names purely so "Team of the Month" has
+ * something to label itself with. Not a real calendar.
+ *
+ * Originally a fixed 38-matchday breakdown (the Premier League's only: 4
+ * matchdays for each of the first 8 months, 3 for the last 2), now
+ * computed from `totalMatchdays` so it also works for a league with a
+ * different club count (e.g. an 18-club league plays 34 matchdays, not
+ * 38). `totalMatchdays` is split into 10 blocks as evenly as possible —
+ * `floor(totalMatchdays / 10)` each, with the remainder's extra matchday
+ * going to the first N months rather than the last — which reproduces the
+ * original 4×8 + 3×2 breakdown exactly at 38 matchdays.
  */
-export const SEASON_MONTHS: SeasonMonth[] = [
-  { name: 'August', matchdayStart: 1, matchdayEnd: 4 },
-  { name: 'September', matchdayStart: 5, matchdayEnd: 8 },
-  { name: 'October', matchdayStart: 9, matchdayEnd: 12 },
-  { name: 'November', matchdayStart: 13, matchdayEnd: 16 },
-  { name: 'December', matchdayStart: 17, matchdayEnd: 20 },
-  { name: 'January', matchdayStart: 21, matchdayEnd: 24 },
-  { name: 'February', matchdayStart: 25, matchdayEnd: 28 },
-  { name: 'March', matchdayStart: 29, matchdayEnd: 32 },
-  { name: 'April', matchdayStart: 33, matchdayEnd: 35 },
-  { name: 'May', matchdayStart: 36, matchdayEnd: 38 },
-];
+export function buildSeasonMonths(totalMatchdays: number): SeasonMonth[] {
+  const base = Math.floor(totalMatchdays / MONTH_NAMES.length);
+  const remainder = totalMatchdays % MONTH_NAMES.length;
+
+  const months: SeasonMonth[] = [];
+  let start = 1;
+  for (let i = 0; i < MONTH_NAMES.length; i++) {
+    const length = base + (i < remainder ? 1 : 0);
+    months.push({ name: MONTH_NAMES[i], matchdayStart: start, matchdayEnd: start + length - 1 });
+    start += length;
+  }
+  return months;
+}

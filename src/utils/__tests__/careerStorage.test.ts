@@ -4,6 +4,7 @@ import { clearCareer, loadCareer, saveCareer, type CareerSaveData } from '../car
 function makeSave(overrides: Partial<CareerSaveData> = {}): CareerSaveData {
   return {
     clubId: 'arsenal',
+    leagueId: 'premier-league',
     managerName: 'Test Manager',
     screen: 'team',
     formationId: '4-4-2',

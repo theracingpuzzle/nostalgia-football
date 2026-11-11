@@ -4,7 +4,7 @@ import { ClubCrest } from '../components/ui/ClubCrest';
 import { FormationXIPitch } from '../components/ui/FormationXIPitch';
 import { Panel } from '../components/ui/Panel';
 import { FORMATIONS } from '../data/formations';
-import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
+import { ALL_CLUBS } from '../data/leagues';
 import { computeMonthlyPlayerStats, pickTeamOfTheMonth } from '../engine';
 import type { Fixture, LeagueTableRow, Player } from '../engine/types';
 import { getLeagueZone, ordinal } from '../utils/leagueZones';
@@ -27,6 +27,7 @@ const HEADLINES: Record<'champion' | 'champions' | 'europa' | 'relegation' | 'mi
  */
 export function SeasonSummaryScreen({
   club,
+  leagueName,
   leagueRow,
   leaguePosition,
   totalClubs,
@@ -37,6 +38,7 @@ export function SeasonSummaryScreen({
   onClose,
 }: {
   club: { name: string; shortName: string; primaryColor: string; secondaryColor: string; crestPath?: string; id: string };
+  leagueName: string;
   leagueRow: LeagueTableRow | undefined;
   leaguePosition: number;
   totalClubs: number;
@@ -58,10 +60,11 @@ export function SeasonSummaryScreen({
     return map;
   }, [allSquads]);
 
+  const totalMatchdays = (totalClubs - 1) * 2;
   const teamOfSeason = useMemo(() => {
-    const stats = computeMonthlyPlayerStats(fixtures, 1, 38, (id) => playerIndex.get(id));
+    const stats = computeMonthlyPlayerStats(fixtures, 1, totalMatchdays, (id) => playerIndex.get(id));
     return pickTeamOfTheMonth(stats, FORMATIONS);
-  }, [fixtures, playerIndex]);
+  }, [fixtures, playerIndex, totalMatchdays]);
 
   return (
     <div className="mx-auto max-w-3xl p-4 text-white">
@@ -75,7 +78,7 @@ export function SeasonSummaryScreen({
         </span>
         {headlineKey === 'relegation' && (
           <span className="text-xs italic opacity-80">
-            (Promotion/relegation between divisions isn't modeled yet — next season starts back in the same {totalClubs}-club Premier League.)
+            (Promotion/relegation between divisions isn't modeled yet — next season starts back in the same {totalClubs}-club {leagueName}.)
           </span>
         )}
       </div>
@@ -97,7 +100,7 @@ export function SeasonSummaryScreen({
         <Panel title="Top Scorers" className="mb-3">
           <ul className="flex flex-col gap-1 text-sm text-ink">
             {topScorers.slice(0, 5).map((s, i) => {
-              const scorerClub = PREMIER_LEAGUE_2008_09.find((c) => c.id === s.clubId);
+              const scorerClub = ALL_CLUBS.find((c) => c.id === s.clubId);
               return (
                 <li key={s.playerId} className={`flex items-center gap-2 rounded-sm px-2 py-1 ${s.clubId === club.id ? 'bg-pitch-light/40 font-bold' : ''}`}>
                   <span className="w-4 text-right text-ink/60">{i + 1}</span>

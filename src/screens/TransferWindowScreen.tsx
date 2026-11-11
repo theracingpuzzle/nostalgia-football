@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
-import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
+import { ALL_CLUBS } from '../data/leagues';
 import type { Player } from '../engine/types';
 
 export interface TransferOffer {
@@ -21,7 +21,7 @@ export type TransferTimelineEntry =
   | { hour: number; kind: 'countdown'; id: string; hoursLeft: number };
 
 function MiniCrest({ clubId }: { clubId: string }) {
-  const club = PREMIER_LEAGUE_2008_09.find((c) => c.id === clubId);
+  const club = ALL_CLUBS.find((c) => c.id === clubId);
   if (!club) return null;
   return <ClubCrest primaryColor={club.primaryColor} secondaryColor={club.secondaryColor} label={club.shortName} crestPath={club.crestPath} size={18} />;
 }

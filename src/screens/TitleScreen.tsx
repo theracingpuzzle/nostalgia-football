@@ -17,7 +17,7 @@ export function TitleScreen({
           Flash Soccer Manager
         </h1>
         <p className="mt-2 text-lg font-bold uppercase tracking-[0.3em] text-white/80">Reborn</p>
-        <p className="mt-4 text-sm text-white/60">A 2008/09 Premier League management recreation</p>
+        <p className="mt-4 text-sm text-white/60">A 2008/09 European football management recreation</p>
       </div>
 
       <div className="flex flex-col gap-2">

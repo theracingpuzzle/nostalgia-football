@@ -2,7 +2,7 @@ import { Button } from '../components/ui/Button';
 import { CardIcon } from '../components/ui/CardIcon';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
-import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
+import { ALL_CLUBS } from '../data/leagues';
 import type { Fixture, MatchEvent, MatchResult, PlayerMinuteTally } from '../engine/types';
 import { computeAttendance } from '../utils/attendance';
 
@@ -53,8 +53,8 @@ export function MatchResultScreen({ fixture, onContinue }: { fixture: Fixture; o
   const result = fixture.result;
   if (!result) return null;
 
-  const homeClub = PREMIER_LEAGUE_2008_09.find((c) => c.id === fixture.homeClubId);
-  const awayClub = PREMIER_LEAGUE_2008_09.find((c) => c.id === fixture.awayClubId);
+  const homeClub = ALL_CLUBS.find((c) => c.id === fixture.homeClubId);
+  const awayClub = ALL_CLUBS.find((c) => c.id === fixture.awayClubId);
 
   const homeCards = cardEntries(result.homeBookings, result.homeRedCards);
   const awayCards = cardEntries(result.awayBookings, result.awayRedCards);

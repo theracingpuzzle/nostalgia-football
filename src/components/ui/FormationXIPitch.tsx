@@ -1,6 +1,6 @@
 import { ClubCrest } from './ClubCrest';
 import { GoalFrame } from './GoalFrame';
-import { PREMIER_LEAGUE_2008_09 } from '../../data/premierLeague0809';
+import { ALL_CLUBS } from '../../data/leagues';
 import type { MonthlyPlayerStat } from '../../engine';
 import type { Position } from '../../engine/types';
 
@@ -43,7 +43,7 @@ export function FormationXIPitch({ entries, managedClubId }: { entries: MonthlyP
 }
 
 function FormationCard({ entry, isManaged }: { entry: MonthlyPlayerStat; isManaged: boolean }) {
-  const club = PREMIER_LEAGUE_2008_09.find((c) => c.id === entry.clubId);
+  const club = ALL_CLUBS.find((c) => c.id === entry.clubId);
   return (
     <div
       className={`flex flex-1 basis-0 min-w-0 max-w-[120px] flex-col items-center gap-0.5 rounded-sm border-2 bg-ink/80 px-1 py-1.5 text-center shadow-[1px_1px_0_rgba(0,0,0,0.4)] md:flex-none ${

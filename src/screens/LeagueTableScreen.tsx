@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
-import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
+import { ALL_CLUBS } from '../data/leagues';
 import type { Fixture, LeagueTableRow, Player } from '../engine/types';
 import { getLeagueZone, ZONE_STYLES } from '../utils/leagueZones';
 import { ClubOverviewScreen } from './ClubOverviewScreen';
@@ -18,7 +18,7 @@ export function LeagueTableScreen({
   allSquads: Record<string, Player[]>;
 }) {
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
-  const selectedClub = selectedClubId ? PREMIER_LEAGUE_2008_09.find((c) => c.id === selectedClubId) : null;
+  const selectedClub = selectedClubId ? ALL_CLUBS.find((c) => c.id === selectedClubId) : null;
   const selectedPosition = selectedClubId ? table.findIndex((r) => r.clubId === selectedClubId) + 1 : 0;
 
   return (
@@ -43,7 +43,7 @@ export function LeagueTableScreen({
             </thead>
             <tbody>
               {table.map((row, i) => {
-                const club = PREMIER_LEAGUE_2008_09.find((c) => c.id === row.clubId);
+                const club = ALL_CLUBS.find((c) => c.id === row.clubId);
                 const isManaged = row.clubId === managedClubId;
                 const position = i + 1;
                 const zone = getLeagueZone(position, table.length);

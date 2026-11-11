@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Panel } from './components/ui/Panel';
 import { ClubListScreen } from './screens/ClubListScreen';
 import { CareerScreen } from './screens/CareerScreen';
+import { LeagueSelectScreen } from './screens/LeagueSelectScreen';
 import { ManagerNameScreen } from './screens/ManagerNameScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { SQUADS_BY_CLUB_ID } from './data/clubSquads';
-import { PREMIER_LEAGUE_2008_09 } from './data/premierLeague0809';
+import { ALL_CLUBS, LEAGUES, getLeagueForClub } from './data/leagues';
 import { clearCareer, loadCareer, type CareerSaveData } from './utils/careerStorage';
 
-type Stage = 'title' | 'managerName' | 'clubSelect' | { kind: 'career'; clubId: string };
+type Stage = 'title' | 'managerName' | 'leagueSelect' | { kind: 'clubSelect'; leagueId: string } | { kind: 'career'; clubId: string };
 
 function App() {
   // Read once at startup — this app only ever writes this key from its own
@@ -18,7 +19,8 @@ function App() {
   const [managerName, setManagerName] = useState('');
 
   if (stage === 'title') {
-    const savedClub = savedCareer ? PREMIER_LEAGUE_2008_09.find((c) => c.id === savedCareer.clubId) : undefined;
+    const savedClub = savedCareer ? ALL_CLUBS.find((c) => c.id === savedCareer.clubId) : undefined;
+    const savedLeague = savedCareer ? getLeagueForClub(savedCareer.clubId) : undefined;
     return (
       <TitleScreen
         onNewCareer={() => {
@@ -26,7 +28,7 @@ function App() {
           setSavedCareer(null);
           setStage('managerName');
         }}
-        continueLabel={savedClub ? `Continue as ${savedClub.shortName} — ${savedCareer?.managerName}` : undefined}
+        continueLabel={savedClub ? `Continue as ${savedClub.shortName}${savedLeague ? ` (${savedLeague.name})` : ''} — ${savedCareer?.managerName}` : undefined}
         onContinueCareer={
           savedCareer && savedClub
             ? () => {
@@ -44,16 +46,27 @@ function App() {
       <ManagerNameScreen
         onContinue={(name) => {
           setManagerName(name);
-          setStage('clubSelect');
+          setStage('leagueSelect');
         }}
       />
     );
   }
 
+  if (stage === 'leagueSelect') {
+    return (
+      <div className="min-h-screen bg-pitch">
+        <LeagueSelectScreen onSelectLeague={(leagueId) => setStage({ kind: 'clubSelect', leagueId })} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-pitch">
-      {stage === 'clubSelect' ? (
-        <ClubListScreen onSelectClub={(clubId) => setStage({ kind: 'career', clubId })} />
+      {stage.kind === 'clubSelect' ? (
+        <ClubListScreen
+          league={LEAGUES.find((l) => l.id === stage.leagueId) ?? LEAGUES[0]}
+          onSelectClub={(clubId) => setStage({ kind: 'career', clubId })}
+        />
       ) : (
         <ClubRoute
           clubId={stage.clubId}
@@ -67,7 +80,7 @@ function App() {
             // doesn't resurrect the career just abandoned.
             clearCareer();
             setSavedCareer(null);
-            setStage('clubSelect');
+            setStage('leagueSelect');
           }}
         />
       )}
@@ -86,7 +99,7 @@ function ClubRoute({
   initialSave?: CareerSaveData;
   onChangeClub: () => void;
 }) {
-  const club = PREMIER_LEAGUE_2008_09.find((c) => c.id === clubId);
+  const club = ALL_CLUBS.find((c) => c.id === clubId);
   const squad = SQUADS_BY_CLUB_ID[clubId];
 
   if (!club || !squad) {

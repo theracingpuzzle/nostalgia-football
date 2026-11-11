@@ -1011,3 +1011,65 @@ Two refinements to `MatchResultScreen.tsx`, both user-requested:
   card event in the list also gets its `CardIcon` plus colored text —
   previously only red cards were styled differently from a goal; yellow
   cards now get their own color too.
+
+## Multi-league foundation + La Liga (Phase 1 of 3)
+
+User request: expand beyond the Premier League to other European leagues,
+plus a Champions League/Europa-style continental competition unlocked by
+league-position qualification. Given the size, this is split into three
+phases — this entry covers the first: removing every single-league
+assumption from the app, and adding one complete second league (La Liga
+2008/09) to prove the architecture actually works end-to-end. Serie A,
+Bundesliga, and Ligue 1 (mechanical repeats of this same pattern) and the
+actual European competition are deliberately follow-up work, not built
+here — see the full phased plan this was built from if picking this back
+up later.
+
+- **New league registry** (`data/leagues.ts`): `LEAGUES` (currently
+  Premier League + La Liga), `ALL_CLUBS` (every club across every league,
+  flattened — club ids are globally unique by construction), and
+  `getLeagueForClub(clubId)`. Adding a league from here is: a new
+  `ClubListing[]` + squad data file following `premierLeague0809.ts` /
+  `realSquads2008_09.ts`'s pattern, then one entry in `LEAGUES`.
+- **La Liga 2008/09**: `data/laLiga0809.ts` (20 real clubs, club ids
+  prefixed `ll-` to guarantee no collision with any other league) and
+  `data/realSquadsLaLiga0809.ts` (full rosters for all 20 — every club
+  needs a fieldable XI for AI-vs-AI matchday simulation to work at all,
+  same reason the Premier League data covers all 20). Same caveats as the
+  Premier League data: best-effort reconstruction from memory, not a
+  verified source, confidence higher for the bigger clubs. No crest SVGs
+  sourced for this league (none fetched, not worth the scope here) — these
+  clubs fall back to `ClubCrest`'s generic colored shield, which is why
+  `ClubListing.crestPath` is now optional rather than required.
+- **Season length generalized**: `JANUARY_MATCHDAY` (was a hardcoded 20)
+  and `SEASON_MONTHS` (was a hardcoded 38-matchday breakdown) are now
+  computed from the managed league's own club count
+  (`(clubCount - 1) * 2` matchdays) via `buildSeasonMonths(totalMatchdays)`
+  in `data/seasonMonths.ts` — verified it reproduces the original 38-
+  matchday Premier League boundaries exactly (4 matchdays × 8 months, 3 ×
+  2), so nothing shifts for existing careers; also verified it splits
+  sensibly for an 18-club league's 34 matchdays, ready for Bundesliga in
+  Phase 2.
+- **Transfer system scoped to the managed league**: `simulateLeagueTransferActivity`,
+  `simulateLeagueRumours`, and `generateTransferOffers` (all in
+  `CareerScreen.tsx`) used to derive "other clubs" from every key in
+  `allSquads` — harmless with one league's worth of clubs in there, but
+  once `SQUADS_BY_CLUB_ID` holds multiple leagues' squads this would have
+  let a Premier League club swap/rumor players with a La Liga club. Fixed
+  by scoping all three to the managed club's own league's club-id list.
+  Verified live: a full La Liga pre-season window's headlines and offers
+  only ever involved La Liga clubs.
+- **League selection UI**: new `screens/LeagueSelectScreen.tsx` inserted
+  into `App.tsx`'s flow between manager name and club selection;
+  `ClubListScreen` now takes the chosen `league` as a prop instead of
+  importing the Premier League directly. `CareerSaveData` gained a
+  `leagueId` field; the title screen's "Continue as..." label now also
+  shows the league (e.g. "Continue as Real Madrid (La Liga) — Alex").
+- Verified live end-to-end in both directions: a brand-new La Liga career
+  (Real Madrid and Barcelona both tested) — league select, club select,
+  pre-season transfer window with La Liga-only news/offers, playing a live
+  match with correct stadium/attendance, Full Time report, league table
+  showing all 20 La Liga clubs with qualification zones, save/reload
+  correctly resuming "Real Madrid (La Liga)" — and a fresh Premier League
+  career, confirming zero regression (transfer headlines stayed
+  Premier-League-only, fixtures/table/stats all unaffected).

@@ -1,16 +1,15 @@
-import { Fragment } from 'react';
+import { Fragment, useMemo } from 'react';
 import { Button } from '../components/ui/Button';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
-import { SEASON_MONTHS } from '../data/seasonMonths';
-import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
+import { buildSeasonMonths } from '../data/seasonMonths';
+import { ALL_CLUBS } from '../data/leagues';
 import type { Fixture } from '../engine/types';
-
-const MONTH_BY_FINAL_MATCHDAY = new Map(SEASON_MONTHS.map((m) => [m.matchdayEnd, m]));
 
 export function FixturesScreen({
   managedClubId,
   fixtures,
+  totalMatchdays,
   xiReady,
   onPlayNext,
   onViewSeasonSummary,
@@ -19,12 +18,15 @@ export function FixturesScreen({
 }: {
   managedClubId: string;
   fixtures: Fixture[];
+  /** Total matchdays for this league ((clubCount - 1) * 2) — drives the Team of the Month month boundaries, which aren't always 38 now that leagues can have a different club count. */
+  totalMatchdays: number;
   xiReady: boolean;
   onPlayNext: () => void;
   onViewSeasonSummary?: () => void;
   onViewTeamOfTheMonth?: () => void;
   onGoToTeamSelection?: () => void;
 }) {
+  const monthByFinalMatchday = useMemo(() => new Map(buildSeasonMonths(totalMatchdays).map((m) => [m.matchdayEnd, m])), [totalMatchdays]);
   const myFixtures = fixtures.filter((f) => f.homeClubId === managedClubId || f.awayClubId === managedClubId);
   const nextUnplayed = fixtures.some((f) => !f.played);
   const seasonComplete = fixtures.length > 0 && !nextUnplayed;
@@ -65,8 +67,8 @@ export function FixturesScreen({
           {myFixtures.map((fixture) => {
             const isHome = fixture.homeClubId === managedClubId;
             const opponentId = isHome ? fixture.awayClubId : fixture.homeClubId;
-            const opponent = PREMIER_LEAGUE_2008_09.find((c) => c.id === opponentId);
-            const monthDue = MONTH_BY_FINAL_MATCHDAY.get(fixture.matchday);
+            const opponent = ALL_CLUBS.find((c) => c.id === opponentId);
+            const monthDue = monthByFinalMatchday.get(fixture.matchday);
             return (
               <Fragment key={fixture.id}>
                 <li className="flex items-center justify-between gap-2 px-1 py-2">

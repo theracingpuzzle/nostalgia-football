@@ -6,8 +6,8 @@ export interface ClubListing {
   shortName: string;
   primaryColor: string;
   secondaryColor: string;
-  /** Relative path (no leading slash, so it also works when hosted under a sub-path) to that club's real crest SVG, sourced from Wikipedia (see PLAN.md). */
-  crestPath: string;
+  /** Relative path (no leading slash, so it also works when hosted under a sub-path) to that club's real crest SVG, sourced from Wikipedia (see PLAN.md). Optional — leagues added later fall back to ClubCrest's generic colored shield rather than a sourced image. */
+  crestPath?: string;
   /** Generic kit layout (not a real kit template) — e.g. "black/white stripes" is a well-known fact about Newcastle's identity, not a licensed design. */
   kitPattern: KitPattern;
   /** Real home ground, named as it was in 2008/09 (e.g. Man City's ground hadn't been renamed Etihad Stadium yet). */

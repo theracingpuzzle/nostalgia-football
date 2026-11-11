@@ -12,6 +12,7 @@ const STORAGE_KEY = 'fsm-career-v1';
  */
 export interface CareerSaveData {
   clubId: string;
+  leagueId: string;
   managerName: string;
   screen: CareerScreenId;
   formationId: string;
@@ -31,7 +32,13 @@ export interface CareerSaveData {
 function isCareerSaveData(value: unknown): value is CareerSaveData {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  return typeof v.clubId === 'string' && typeof v.managerName === 'string' && Array.isArray(v.fixtures) && typeof v.allSquads === 'object';
+  return (
+    typeof v.clubId === 'string' &&
+    typeof v.leagueId === 'string' &&
+    typeof v.managerName === 'string' &&
+    Array.isArray(v.fixtures) &&
+    typeof v.allSquads === 'object'
+  );
 }
 
 /** localStorage can throw (private browsing, quota exceeded, disabled storage) — losing the autosave isn't worth crashing the app over. */
