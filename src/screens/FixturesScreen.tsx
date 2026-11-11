@@ -15,6 +15,7 @@ export function FixturesScreen({
   onPlayNext,
   onViewSeasonSummary,
   onViewTeamOfTheMonth,
+  onGoToTeamSelection,
 }: {
   managedClubId: string;
   fixtures: Fixture[];
@@ -22,6 +23,7 @@ export function FixturesScreen({
   onPlayNext: () => void;
   onViewSeasonSummary?: () => void;
   onViewTeamOfTheMonth?: () => void;
+  onGoToTeamSelection?: () => void;
 }) {
   const myFixtures = fixtures.filter((f) => f.homeClubId === managedClubId || f.awayClubId === managedClubId);
   const nextUnplayed = fixtures.some((f) => !f.played);
@@ -48,8 +50,13 @@ export function FixturesScreen({
         </p>
       ) : (
         !xiReady && (
-          <p className="mb-3 rounded-sm border-2 border-amber-300 bg-amber-800 px-2 py-1.5 text-sm font-bold text-white">
-            Pick exactly 11 starters on the Team Selection screen before playing.
+          <p className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm border-2 border-amber-300 bg-amber-800 px-2 py-1.5 text-sm font-bold text-white">
+            Pick exactly 11 starters before playing.
+            {onGoToTeamSelection && (
+              <Button variant="secondary" onClick={onGoToTeamSelection}>
+                Go to Team Selection
+              </Button>
+            )}
           </p>
         )
       )}

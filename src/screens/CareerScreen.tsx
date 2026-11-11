@@ -568,6 +568,7 @@ export function CareerScreen({
           onPlayNext={playNextFixture}
           onViewSeasonSummary={seasonComplete ? () => setSeasonSummaryDismissed(false) : undefined}
           onViewTeamOfTheMonth={() => setScreen('totm')}
+          onGoToTeamSelection={() => setScreen('team')}
         />
       )}
 

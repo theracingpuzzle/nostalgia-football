@@ -875,3 +875,23 @@ guaranteeing one tidy item per hour. Verified live: a typical window now
 has most of its news/offers landing from 18:00 onward, with the last hour
 or two visibly the busiest. No change to how many deals/rumours/offers are
 generated, just when they land.
+
+## Mobile Team Selection reorder, and a fixable "pick 11" warning
+
+Two usability fixes, both user-reported:
+
+- **Mobile Team Selection order.** Coach's Help and Continue used to sit
+  below the entire Squad list, meaning a long scroll past every player row
+  just to reach Continue. Reordered `TeamSelectionScreen.tsx`'s mobile
+  (below `lg`) stack to Formation → Pitch+Substitutes → Coach's Help +
+  Continue → Squad, so both sit right after the pitch instead of at the
+  bottom of the page. Desktop's sidebar + main-area layout is unchanged —
+  the squad list now gets explicit `lg:col-start-2` placement (it used to
+  just follow the pitch panel inside one bundled div) so it still lands in
+  the main column below the pitch rather than wrapping under the sidebar.
+- **"Pick 11 starters" warning is now a button.** The amber warning shown
+  above the fixture list when the XI isn't ready used to be read-only text
+  telling you to go fix it on another screen. `FixturesScreen.tsx` now
+  takes an `onGoToTeamSelection` prop and renders a "Go to Team Selection"
+  button right inside that warning, wired to `setScreen('team')` in
+  `CareerScreen.tsx` — one tap instead of finding the nav menu yourself.

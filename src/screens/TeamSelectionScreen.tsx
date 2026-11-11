@@ -531,26 +531,28 @@ export function TeamSelectionScreen({
 
       {/*
         Mobile (below lg): pitch comes right after the formation picker,
-        promoted above Coach's Help/Continue — previously the sidebar
-        (formation + advice + continue) stacked above the pitch on narrow
-        screens, pushing the actual football view a long way down the page.
-        Desktop keeps the original sidebar + main-area layout, driven by
-        `order`/`lg:order` below rather than duplicating the expensive parts
-        (pitch, substitutes, squad) — only the small, cheap panels
-        (formation/coach/continue) are rendered twice, once per layout.
+        then Coach's Help and Continue right after the pitch — so both sit
+        near the actual football view instead of below the full squad list,
+        and Continue doesn't need a long scroll to reach. The squad list
+        (long, scrollable) comes last. Desktop keeps the original sidebar +
+        main-area layout, driven by `order`/`lg:order` (and `lg:col-start-2`
+        for the squad list, which must land in the main column below the
+        pitch rather than auto-placing into the sidebar column) rather than
+        duplicating the expensive parts (pitch, substitutes, squad) — only
+        the small, cheap panels (formation/coach/continue) are rendered
+        twice, once per layout.
       */}
       <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[220px_1fr] lg:items-start">
         <div className="order-1 lg:hidden">{formationPanel}</div>
 
-        <div className="order-2 lg:order-2 flex flex-col gap-3">
-          {pitchAndSubs}
-          {squadPanel}
-        </div>
+        <div className="order-2 lg:order-2">{pitchAndSubs}</div>
 
         <div className="order-3 flex flex-col gap-3 lg:hidden">
           {coachPanel}
           {continueButton}
         </div>
+
+        <div className="order-4 lg:order-3 lg:col-start-2">{squadPanel}</div>
 
         <div className="hidden lg:order-1 lg:flex lg:flex-col lg:gap-3">
           {formationPanel}
