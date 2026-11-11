@@ -15,16 +15,17 @@ export interface PlayerSeasonTotal {
 
 type SortKey = 'goals' | 'assists' | 'yellowCards' | 'redCards';
 
-const SORT_TABS: { key: SortKey; label: string }[] = [
-  { key: 'goals', label: 'Goals' },
-  { key: 'assists', label: 'Assists' },
-  { key: 'yellowCards', label: 'Yellow Cards' },
-  { key: 'redCards', label: 'Red Cards' },
+const SORT_TABS: { key: SortKey; label: string; columnHeader: string }[] = [
+  { key: 'goals', label: 'Goals', columnHeader: 'G' },
+  { key: 'assists', label: 'Assists', columnHeader: 'A' },
+  { key: 'yellowCards', label: 'Yellow Cards', columnHeader: 'YC' },
+  { key: 'redCards', label: 'Red Cards', columnHeader: 'RC' },
 ];
 
-/** League-wide season stats — goals, assists, yellow cards, and red cards per player, ranked by whichever column is selected. */
+/** League-wide season stats — goals, assists, yellow cards, and red cards per player. Each tab shows just its own column, ranked by it, rather than all four at once. */
 export function StatsScreen({ stats, managedClubId }: { stats: PlayerSeasonTotal[]; managedClubId: string }) {
   const [sortBy, setSortBy] = useState<SortKey>('goals');
+  const activeTab = SORT_TABS.find((t) => t.key === sortBy) ?? SORT_TABS[0];
   const sorted = [...stats].filter((s) => s[sortBy] > 0).sort((a, b) => b[sortBy] - a[sortBy]);
 
   return (
@@ -56,10 +57,7 @@ export function StatsScreen({ stats, managedClubId }: { stats: PlayerSeasonTotal
                   <th className="px-2 py-1.5 text-right font-bold uppercase">#</th>
                   <th className="px-2 py-1.5 text-left font-bold uppercase">Player</th>
                   <th className="px-2 py-1.5 text-left font-bold uppercase">Club</th>
-                  <th className="px-2 py-1.5 text-right font-bold uppercase">G</th>
-                  <th className="px-2 py-1.5 text-right font-bold uppercase">A</th>
-                  <th className="px-2 py-1.5 text-right font-bold uppercase">YC</th>
-                  <th className="px-2 py-1.5 text-right font-bold uppercase">RC</th>
+                  <th className="px-2 py-1.5 text-right font-bold uppercase">{activeTab.columnHeader}</th>
                 </tr>
               </thead>
               <tbody>
@@ -78,10 +76,7 @@ export function StatsScreen({ stats, managedClubId }: { stats: PlayerSeasonTotal
                           {club?.shortName ?? s.clubId}
                         </span>
                       </td>
-                      <td className={`px-2 py-1.5 text-right ${sortBy === 'goals' ? 'font-black' : ''}`}>{s.goals}</td>
-                      <td className={`px-2 py-1.5 text-right ${sortBy === 'assists' ? 'font-black' : ''}`}>{s.assists}</td>
-                      <td className={`px-2 py-1.5 text-right ${sortBy === 'yellowCards' ? 'font-black' : ''}`}>{s.yellowCards}</td>
-                      <td className={`px-2 py-1.5 text-right text-red-700 ${sortBy === 'redCards' ? 'font-black' : ''}`}>{s.redCards}</td>
+                      <td className={`px-2 py-1.5 text-right font-black ${sortBy === 'redCards' ? 'text-red-700' : ''}`}>{s[sortBy]}</td>
                     </tr>
                   );
                 })}

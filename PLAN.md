@@ -743,3 +743,31 @@ reads as comically lopsided (a big name for a squad player), same as the
 player's own offers already could. Verified live: news renders correctly,
 the player's own accept/decline flow is unaffected, and squads genuinely
 update from the AI-to-AI swaps (not just cosmetic text).
+
+**Follow-up, same day**: the window originally dumped everything at once
+("one click and it's over"). Rebuilt as a live "deadline day" sequence
+instead — asked the user clarifying questions first (clock vs no clock,
+skippable or not, combined vs separate feeds, rough duration), all
+answered with the recommended option. `TransferWindowScreen` now ticks a
+simulated clock hour by hour (09:00-22:00, ~35s total if not skipped,
+`DEADLINE_DAY_START_HOUR`/`END_HOUR` exported alongside it), revealing news
+and the player's own offers interleaved on one chronological timeline as
+their scheduled hour arrives (`CareerScreen.scheduleTransferTimeline`
+shuffles both into random hours). A "Skip to Deadline" button jumps
+straight to the end, same pattern as the match screen's "Skip to Full
+Time"; "Continue" only appears once the sequence has actually finished.
+Verified live: clock ticks and progress bar fill, offers/news interleave
+correctly, accepting an offer mid-sequence still works, and skip reveals
+everything and unlocks Continue.
+
+## Added a 5th formation + trimmed Stats columns
+
+- **5-3-2 formation** added to `data/formations.ts` at the user's explicit
+  request — unlike the original 4 (4-4-2/4-3-3/3-5-2/4-5-1, confirmed from
+  inspecting the real Team Selection screen), this one is **not** confirmed
+  from the original; flagged as such directly in the file's comment, same
+  honesty pattern as every other new addition this project has made.
+- **Stats screen now shows one column at a time**, matching whichever tab
+  is active (Goals/Assists/Yellow Cards/Red Cards), instead of all four
+  stat columns regardless of which you'd picked — cleaner, and the sort
+  tab you're on is now obviously also the only number on screen.

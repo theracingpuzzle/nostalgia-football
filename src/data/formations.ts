@@ -1,11 +1,14 @@
 import type { Formation } from '../engine/types';
 
-// Data-driven formation list, trimmed to the 4 formations actually observed
-// in the original (Team Selection & Formation screen inspection): 4-4-2,
-// 4-3-3, 3-5-2, 4-5-1. Don't add more without confirming they exist in the
-// original. attackBias/defenseBias are leftovers from the parked statistical
-// engine — unused by the new screens, kept only so the old prototype flow
-// still compiles.
+// Data-driven formation list. The first 4 (4-4-2, 4-3-3, 3-5-2, 4-5-1) are
+// the ones actually observed in the original (Team Selection & Formation
+// screen inspection) — don't add more of those without confirming they
+// exist in the original. 5-3-2 was added after that, at the user's explicit
+// request, and is NOT confirmed from the original like the other four — a
+// deliberate addition, flagged the same way the transfer window etc. are.
+// attackBias/defenseBias are leftovers from the parked statistical engine —
+// unused by the new screens, kept only so the old prototype flow still
+// compiles.
 export const FORMATIONS: Formation[] = [
   {
     id: '4-4-2',
@@ -54,6 +57,18 @@ export const FORMATIONS: Formation[] = [
     ],
     attackBias: 0.9,
     defenseBias: 1.12,
+  },
+  {
+    id: '5-3-2',
+    name: '5-3-2',
+    slots: [
+      { position: 'GK', count: 1 },
+      { position: 'DEF', count: 5 },
+      { position: 'MID', count: 3 },
+      { position: 'FWD', count: 2 },
+    ],
+    attackBias: 0.88,
+    defenseBias: 1.18,
   },
 ];
 

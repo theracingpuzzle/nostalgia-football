@@ -14,7 +14,13 @@ import { SeasonSummaryScreen } from './SeasonSummaryScreen';
 import { StatsScreen, type PlayerSeasonTotal } from './StatsScreen';
 import { TeamOfTheMonthScreen } from './TeamOfTheMonthScreen';
 import { TeamSelectionScreen } from './TeamSelectionScreen';
-import { TransferWindowScreen, type TransferOffer } from './TransferWindowScreen';
+import {
+  DEADLINE_DAY_END_HOUR,
+  DEADLINE_DAY_START_HOUR,
+  TransferWindowScreen,
+  type TransferOffer,
+  type TransferTimelineEntry,
+} from './TransferWindowScreen';
 
 const ALL_CLUB_IDS = PREMIER_LEAGUE_2008_09.map((c) => c.id);
 const AI_FORMATION = FORMATIONS.find((f) => f.id === DEFAULT_FORMATION_ID) ?? FORMATIONS[0];
@@ -91,6 +97,27 @@ function simulateLeagueTransferActivity(
   }
 
   return { updatedSquads: next, news };
+}
+
+/**
+ * Spreads this window's news items and your own offers across the fixed
+ * "deadline day" hours (see TransferWindowScreen), in random order, each
+ * getting its own hour — so the live sequence reveals a mix of both rather
+ * than all the news first and all your offers after.
+ */
+function scheduleTransferTimeline(news: string[], offers: TransferOffer[]): TransferTimelineEntry[] {
+  type TimelineItem = { kind: 'news'; id: string; text: string } | { kind: 'offer'; id: string; offerId: string };
+  const items: TimelineItem[] = [
+    ...news.map((text, i): TimelineItem => ({ kind: 'news', id: `news-${i}-${text.length}`, text })),
+    ...offers.map((offer): TimelineItem => ({ kind: 'offer', id: `offer-${offer.id}`, offerId: offer.id })),
+  ];
+  const shuffledItems = [...items].sort(() => Math.random() - 0.5);
+
+  const availableHours: number[] = [];
+  for (let h = DEADLINE_DAY_START_HOUR; h <= DEADLINE_DAY_END_HOUR; h++) availableHours.push(h);
+  const chosenHours = availableHours.sort(() => Math.random() - 0.5).slice(0, shuffledItems.length).sort((a, b) => a - b);
+
+  return shuffledItems.map((item, i) => ({ ...item, hour: chosenHours[i] }));
 }
 
 function getFormation(formationId: string) {
@@ -230,7 +257,9 @@ export function CareerScreen({
   const [transferWindow, setTransferWindow] = useState<'preseason' | 'january' | null>('preseason');
   const [januaryWindowShown, setJanuaryWindowShown] = useState(false);
   const [transferOffers, setTransferOffers] = useState<TransferOffer[]>(() => generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
-  const [transferNews, setTransferNews] = useState<string[]>(() => initialTransferNewsRef.current);
+  const [transferTimeline, setTransferTimeline] = useState<TransferTimelineEntry[]>(() =>
+    scheduleTransferTimeline(initialTransferNewsRef.current, transferOffers),
+  );
   const [seasonSummaryDismissed, setSeasonSummaryDismissed] = useState(false);
 
   const liveSquad = allSquads[club.id] ?? squad;
@@ -258,9 +287,10 @@ export function CareerScreen({
 
   function openTransferWindow(which: 'preseason' | 'january') {
     const { updatedSquads, news } = simulateLeagueTransferActivity(allSquads, club.id, 5);
+    const offers = generateTransferOffers(club.id, updatedSquads, new Set(selectedXI));
     setAllSquads(updatedSquads);
-    setTransferOffers(generateTransferOffers(club.id, updatedSquads, new Set(selectedXI)));
-    setTransferNews(news);
+    setTransferOffers(offers);
+    setTransferTimeline(scheduleTransferTimeline(news, offers));
     setTransferWindow(which);
   }
 
@@ -382,7 +412,7 @@ export function CareerScreen({
       <TransferWindowScreen
         title={transferWindow === 'preseason' ? 'Pre-Season Transfer Window' : 'January Transfer Window'}
         offers={transferOffers}
-        news={transferNews}
+        timeline={transferTimeline}
         onAccept={acceptTransferOffer}
         onDecline={declineTransferOffer}
         onDone={() => setTransferWindow(null)}
