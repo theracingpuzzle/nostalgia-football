@@ -99,16 +99,69 @@ function simulateLeagueTransferActivity(
   return { updatedSquads: next, news };
 }
 
+const TRANSFER_RUMOUR_TEMPLATES: ((playerName: string, playerClub: string, interestedClub: string) => string)[] = [
+  (playerName, playerClub, interestedClub) => `Whispers: ${interestedClub} are keeping tabs on ${playerClub}'s ${playerName} — nothing official yet.`,
+  (playerName, playerClub, interestedClub) => `Paper talk: ${playerName} (${playerClub}) strongly linked with a shock move to ${interestedClub}.`,
+  (playerName, playerClub, interestedClub) => `Sources suggest ${interestedClub} have made an enquiry for ${playerClub}'s ${playerName}. Early days.`,
+  (playerName, playerClub, interestedClub) => `Agent spotted at ${interestedClub}'s training ground — cue the ${playerClub} ${playerName} rumours.`,
+  (playerName, playerClub, interestedClub) => `Unconfirmed: ${interestedClub} are said to be "monitoring" ${playerName}'s situation at ${playerClub}.`,
+];
+
+/**
+ * Pure speculation, same tabloid spirit as simulateLeagueTransferActivity
+ * but deliberately NOT applied to any squad — a rumour is just a headline,
+ * not a done deal, and (same as real transfer gossip) nothing says it has
+ * to actually happen. Kept separate from the confirmed-swap news so the UI
+ * can clearly mark one "RUMOUR" and the other "DONE DEAL".
+ */
+function simulateLeagueRumours(allSquads: Record<string, Player[]>, excludeClubId: string, count: number): string[] {
+  const otherClubIds = Object.keys(allSquads).filter((id) => id !== excludeClubId);
+  const rumours: string[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const playerClubId = otherClubIds[Math.floor(Math.random() * otherClubIds.length)];
+    const roster = allSquads[playerClubId] ?? [];
+    if (roster.length === 0) continue;
+    const player = roster[Math.floor(Math.random() * roster.length)];
+
+    const interestedCandidates = otherClubIds.filter((id) => id !== playerClubId);
+    if (interestedCandidates.length === 0) continue;
+    const interestedClubId = interestedCandidates[Math.floor(Math.random() * interestedCandidates.length)];
+
+    const playerClubName = PREMIER_LEAGUE_2008_09.find((c) => c.id === playerClubId)?.shortName ?? playerClubId;
+    const interestedClubName = PREMIER_LEAGUE_2008_09.find((c) => c.id === interestedClubId)?.shortName ?? interestedClubId;
+    const template = TRANSFER_RUMOUR_TEMPLATES[Math.floor(Math.random() * TRANSFER_RUMOUR_TEMPLATES.length)];
+    rumours.push(template(player.name, playerClubName, interestedClubName));
+  }
+
+  return rumours;
+}
+
+const COUNTDOWN_HOURS_LEFT_CHECKPOINTS = [12, 9, 6, 3, 1];
+
+/** Fixed "X hours left" checkpoints through the window — not tied to any news/offer. */
+function buildCountdownEntries(): TransferTimelineEntry[] {
+  return COUNTDOWN_HOURS_LEFT_CHECKPOINTS.map((hoursLeft) => ({
+    hour: DEADLINE_DAY_END_HOUR - hoursLeft,
+    kind: 'countdown' as const,
+    id: `countdown-${hoursLeft}`,
+    hoursLeft,
+  })).filter((entry) => entry.hour >= DEADLINE_DAY_START_HOUR);
+}
+
 /**
  * Spreads this window's news items and your own offers across the fixed
  * "deadline day" hours (see TransferWindowScreen), in random order, each
  * getting its own hour — so the live sequence reveals a mix of both rather
- * than all the news first and all your offers after.
+ * than all the news first and all your offers after. Fixed "hours left"
+ * countdown entries are layered on top at the same checkpoints every time.
  */
-function scheduleTransferTimeline(news: string[], offers: TransferOffer[]): TransferTimelineEntry[] {
-  type TimelineItem = { kind: 'news'; id: string; text: string } | { kind: 'offer'; id: string; offerId: string };
+function scheduleTransferTimeline(news: { text: string; confirmed: boolean }[], offers: TransferOffer[]): TransferTimelineEntry[] {
+  type TimelineItem =
+    | { kind: 'news'; id: string; text: string; confirmed: boolean }
+    | { kind: 'offer'; id: string; offerId: string };
   const items: TimelineItem[] = [
-    ...news.map((text, i): TimelineItem => ({ kind: 'news', id: `news-${i}-${text.length}`, text })),
+    ...news.map((n, i): TimelineItem => ({ kind: 'news', id: `news-${i}-${n.text.length}`, text: n.text, confirmed: n.confirmed })),
     ...offers.map((offer): TimelineItem => ({ kind: 'offer', id: `offer-${offer.id}`, offerId: offer.id })),
   ];
   const shuffledItems = [...items].sort(() => Math.random() - 0.5);
@@ -117,7 +170,8 @@ function scheduleTransferTimeline(news: string[], offers: TransferOffer[]): Tran
   for (let h = DEADLINE_DAY_START_HOUR; h <= DEADLINE_DAY_END_HOUR; h++) availableHours.push(h);
   const chosenHours = availableHours.sort(() => Math.random() - 0.5).slice(0, shuffledItems.length).sort((a, b) => a - b);
 
-  return shuffledItems.map((item, i) => ({ ...item, hour: chosenHours[i] }));
+  const scheduled: TransferTimelineEntry[] = shuffledItems.map((item, i) => ({ ...item, hour: chosenHours[i] }));
+  return [...scheduled, ...buildCountdownEntries()].sort((a, b) => a.hour - b.hour);
 }
 
 function getFormation(formationId: string) {
@@ -248,10 +302,14 @@ export function CareerScreen({
   // pre-season window already reflects it; the ref is just a same-render
   // side channel so the news initializer below can read what this one
   // generated, without rerolling a different random outcome.
-  const initialTransferNewsRef = useRef<string[]>([]);
+  const initialTransferNewsRef = useRef<{ text: string; confirmed: boolean }[]>([]);
   const [allSquads, setAllSquads] = useState<Record<string, Player[]>>(() => {
     const { updatedSquads, news } = simulateLeagueTransferActivity(cloneSquads(SQUADS_BY_CLUB_ID), club.id, 5);
-    initialTransferNewsRef.current = news;
+    const rumours = simulateLeagueRumours(updatedSquads, club.id, 4);
+    initialTransferNewsRef.current = [
+      ...news.map((text) => ({ text, confirmed: true })),
+      ...rumours.map((text) => ({ text, confirmed: false })),
+    ];
     return updatedSquads;
   });
   const [transferWindow, setTransferWindow] = useState<'preseason' | 'january' | null>('preseason');
@@ -287,10 +345,12 @@ export function CareerScreen({
 
   function openTransferWindow(which: 'preseason' | 'january') {
     const { updatedSquads, news } = simulateLeagueTransferActivity(allSquads, club.id, 5);
+    const rumours = simulateLeagueRumours(updatedSquads, club.id, 4);
     const offers = generateTransferOffers(club.id, updatedSquads, new Set(selectedXI));
+    const combinedNews = [...news.map((text) => ({ text, confirmed: true })), ...rumours.map((text) => ({ text, confirmed: false }))];
     setAllSquads(updatedSquads);
     setTransferOffers(offers);
-    setTransferTimeline(scheduleTransferTimeline(news, offers));
+    setTransferTimeline(scheduleTransferTimeline(combinedNews, offers));
     setTransferWindow(which);
   }
 

@@ -13,8 +13,9 @@ export interface TransferOffer {
 }
 
 export type TransferTimelineEntry =
-  | { hour: number; kind: 'news'; id: string; text: string }
-  | { hour: number; kind: 'offer'; id: string; offerId: string };
+  | { hour: number; kind: 'news'; id: string; text: string; confirmed: boolean }
+  | { hour: number; kind: 'offer'; id: string; offerId: string }
+  | { hour: number; kind: 'countdown'; id: string; hoursLeft: number };
 
 /** A fixed "deadline day" window, same bounds every time — CareerScreen schedules news/offers into these hours. */
 export const DEADLINE_DAY_START_HOUR = 9;
@@ -63,7 +64,9 @@ export function TransferWindowScreen({
   }
 
   const displayedHour = Math.min(hour, DEADLINE_DAY_END_HOUR);
-  const revealed = timeline.filter((entry) => entry.hour <= displayedHour);
+  // Newest first: the timeline itself is built oldest-to-newest (it's how
+  // the hours get assigned), so the feed is reversed only for display.
+  const revealed = [...timeline].filter((entry) => entry.hour <= displayedHour).reverse();
   const offersById = new Map(offers.map((o) => [o.id, o]));
   const totalTicks = DEADLINE_DAY_END_HOUR - (DEADLINE_DAY_START_HOUR - 1);
   const progress = ((displayedHour - (DEADLINE_DAY_START_HOUR - 1)) / totalTicks) * 100;
@@ -91,12 +94,30 @@ export function TransferWindowScreen({
 
       <div className="flex flex-col gap-3">
         {revealed.map((entry) => {
+          if (entry.kind === 'countdown') {
+            return (
+              <p
+                key={entry.id}
+                className="rounded-sm border-2 border-dashed border-white/30 bg-white/5 px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wide text-white/80"
+              >
+                ⏳ {entry.hoursLeft} {entry.hoursLeft === 1 ? 'hour' : 'hours'} left in the window
+              </p>
+            );
+          }
+
           if (entry.kind === 'news') {
             return (
               <Panel key={entry.id}>
-                <p className="text-sm italic text-ink/70">
-                  <span className="mr-1.5 not-italic text-xs font-bold text-ink/50">{String(entry.hour).padStart(2, '0')}:00</span>
-                  {entry.text}
+                <p className="text-sm text-ink/70">
+                  <span className="mr-1.5 text-xs font-bold text-ink/50">{String(entry.hour).padStart(2, '0')}:00</span>
+                  <span
+                    className={`mr-1.5 rounded-sm px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                      entry.confirmed ? 'bg-green-700 text-white' : 'bg-amber-400 text-ink'
+                    }`}
+                  >
+                    {entry.confirmed ? 'Done deal' : 'Rumour'}
+                  </span>
+                  <span className="italic">{entry.text}</span>
                 </p>
               </Panel>
             );

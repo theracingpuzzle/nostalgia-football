@@ -822,3 +822,30 @@ Purely presentational — not read by the match engine, doesn't affect
 results. Shown as "{Stadium Name} · Attendance {number}" under the
 scoreboard in `MatchAnimationScreen.tsx` and under the "Full Time" heading
 in `MatchResultScreen.tsx`.
+
+## Transfer deadline day: newest-first, rumours, and a countdown
+
+Three refinements to the deadline-day feed in `TransferWindowScreen.tsx`,
+all user-requested:
+
+- **Newest at the top.** The feed used to grow downward as the clock
+  ticked; `revealed` is now reversed only for display, so the latest
+  reveal always appears first, like a live news feed rather than a log.
+- **Rumours vs done deals.** Previously every "other clubs" headline was
+  phrased as an already-completed swap. Added `simulateLeagueRumours` in
+  `CareerScreen.tsx` (new `TRANSFER_RUMOUR_TEMPLATES`) — speculative
+  headlines about a player and an "interested" club that are **never**
+  applied to any squad, same as real transfer gossip not always coming
+  off. Each news entry now carries `confirmed: boolean` and renders a
+  clear "DONE DEAL" (green) or "RUMOUR" (amber) badge, so it's obvious at
+  a glance which headlines actually moved a player and which are just talk.
+- **"Hours left" countdown entries.** `buildCountdownEntries` in
+  `CareerScreen.tsx` injects fixed checkpoints (12/9/6/3/1 hours left)
+  into the timeline at their corresponding hour, rendered as a distinct
+  dashed banner between news/offer panels — not tied to any deal, purely
+  there to convey how much of deadline day is left.
+
+All of this is still the same "just for fun" simulation it always was —
+no fees, no transfer values, no real market — now just presented with
+clearer signal (confirmed vs rumour) and better pacing (newest-first,
+countdown) per direct user feedback.
