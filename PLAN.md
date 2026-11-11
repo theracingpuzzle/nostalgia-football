@@ -895,3 +895,23 @@ Two usability fixes, both user-reported:
   takes an `onGoToTeamSelection` prop and renders a "Go to Team Selection"
   button right inside that warning, wired to `setScreen('team')` in
   `CareerScreen.tsx` — one tap instead of finding the nav menu yourself.
+
+## Coach's Help in the pitch title, and live cards under the scoreboard
+
+Two more user-requested refinements:
+
+- **Coach's Help moved into the Pitch panel's title bar.** `Panel.tsx` got
+  a new optional `titleAction` slot (rendered right-aligned alongside the
+  title text), and `TeamSelectionScreen.tsx` now puts the Coach's Help
+  button there instead of in its own "Coach says..." panel further down
+  the page. The "drag, or tap a player then tap a slot" instruction moved
+  out of the title string (which would've been cramped next to the
+  button) to a small caption below the pitch itself. The "Coach says..."
+  panel still shows the actual advice content, just without its own
+  button now that the trigger lives up by the pitch.
+- **Live yellow/red cards under the scoreboard.** `MatchAnimationScreen.tsx`
+  already surfaced goals as they happened under the scoreboard; cards now
+  do the same — a small colored rectangle (yellow or red, not an emoji, so
+  it renders consistently) next to the player's name and minute, appended
+  to the same home/away columns as the goal list as `yellow-card`/
+  `red-card` events fire during the live match.

@@ -47,6 +47,17 @@ function appendScorer(prev: Scorer[], playerId: string, playerName: string, minu
   return [...prev, { playerId, playerName, minutes: [minute] }];
 }
 
+interface LiveCard {
+  playerName: string;
+  minute: number;
+  cardType: 'yellow' | 'red';
+}
+
+/** A small rectangle in the card's color — not an emoji, so it renders the same everywhere. */
+function CardIcon({ type }: { type: 'yellow' | 'red' }) {
+  return <span aria-hidden className={`inline-block h-2.5 w-2 shrink-0 rounded-[1px] ${type === 'red' ? 'bg-red-600' : 'bg-yellow-400'}`} />;
+}
+
 function randomJitter(current: number, min: number, max: number, maxDelta: number): number {
   const next = current + (Math.random() * 2 - 1) * maxDelta;
   return Math.max(min, Math.min(max, next));
@@ -110,6 +121,8 @@ export function MatchAnimationScreen({
   const [liveAwayGoals, setLiveAwayGoals] = useState(0);
   const [liveHomeScorers, setLiveHomeScorers] = useState<Scorer[]>([]);
   const [liveAwayScorers, setLiveAwayScorers] = useState<Scorer[]>([]);
+  const [liveHomeCards, setLiveHomeCards] = useState<LiveCard[]>([]);
+  const [liveAwayCards, setLiveAwayCards] = useState<LiveCard[]>([]);
   const firedRef = useRef(new Set<number>());
   // Guards the periodic "wander" jitter from fighting with an in-progress
   // shot's own ball updates — a ref rather than state since it's read inside
@@ -177,6 +190,10 @@ export function MatchAnimationScreen({
             setBall({ x: 50, y: 50 });
             shotInProgressRef.current = false;
           }, SHOT_WINDUP_MS + GOAL_HOLD_MS);
+        } else if ((event.type === 'yellow-card' || event.type === 'red-card') && event.playerName) {
+          const card: LiveCard = { playerName: event.playerName, minute: event.minute, cardType: event.type === 'red-card' ? 'red' : 'yellow' };
+          if (event.side === 'home') setLiveHomeCards((prev) => [...prev, card]);
+          else setLiveAwayCards((prev) => [...prev, card]);
         }
       });
 
@@ -237,6 +254,26 @@ export function MatchAnimationScreen({
           <div>{liveHomeScorers.map((s) => `${s.playerName} ${s.minutes.join(', ')}'`).join(' · ') || '—'}</div>
           <div>{liveAwayScorers.map((s) => `${s.playerName} ${s.minutes.join(', ')}'`).join(' · ') || '—'}</div>
         </div>
+        {(liveHomeCards.length > 0 || liveAwayCards.length > 0) && (
+          <div className="flex justify-center gap-10 px-1 pb-1 text-[11px] text-ink/70">
+            <div className="flex flex-col items-end gap-0.5">
+              {liveHomeCards.map((c, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  <CardIcon type={c.cardType} />
+                  {c.playerName} {c.minute}'
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-col items-start gap-0.5">
+              {liveAwayCards.map((c, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  <CardIcon type={c.cardType} />
+                  {c.playerName} {c.minute}'
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="mx-1 mb-1 h-1.5 overflow-hidden rounded-full bg-ink/30">
           <div className="h-full bg-white/80 transition-all duration-300 ease-linear" style={{ width: `${(minute / 90) * 100}%` }} />
         </div>

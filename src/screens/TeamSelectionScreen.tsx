@@ -380,12 +380,15 @@ export function TeamSelectionScreen({
                 </li>
               </ul>
             ) : (
-              <p className="text-xs text-ink/70">Click Coach's Help for a squad summary and to fill any empty slots.</p>
+              <p className="text-xs text-ink/70">Tap Coach's Help (above the pitch) for a squad summary and to fill any empty slots.</p>
             )}
-      <Button variant="secondary" className="mt-2 w-full" onClick={handleCoachHelp}>
-        Coach's Help
-      </Button>
     </Panel>
+  );
+
+  const coachHelpButton = (
+    <Button variant="secondary" className="px-2 py-1 text-xs" onClick={handleCoachHelp}>
+      Coach's Help
+    </Button>
   );
 
   const continueButton = onContinue ? (
@@ -396,7 +399,7 @@ export function TeamSelectionScreen({
 
   const pitchAndSubs = (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_210px]">
-      <Panel title={`Pitch (${formation.name}) — drag, or tap a player then tap a slot`} accentColor={primaryColor}>
+      <Panel title={`Pitch (${formation.name})`} accentColor={primaryColor} titleAction={coachHelpButton}>
               {/*
                 Portrait (down the page) on mobile for usability, landscape
                 (left-to-right, matching the real reference screenshot) from
@@ -456,6 +459,7 @@ export function TeamSelectionScreen({
                   })}
                 </div>
               </div>
+              <p className="mt-1.5 text-center text-[11px] text-ink/60">Drag, or tap a player then tap a slot.</p>
             </Panel>
 
             <Panel title="Substitutes" accentColor={primaryColor}>
