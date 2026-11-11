@@ -19,12 +19,15 @@ export interface TransferOffer {
 export function TransferWindowScreen({
   title,
   offers,
+  news = [],
   onAccept,
   onDecline,
   onDone,
 }: {
   title: string;
   offers: TransferOffer[];
+  /** Other clubs' own deadline-day moves — not yours to accept/decline, just flavor to read. */
+  news?: string[];
   onAccept: (offerId: string) => void;
   onDecline: (offerId: string) => void;
   onDone: () => void;
@@ -35,6 +38,18 @@ export function TransferWindowScreen({
       <p className="mb-3 text-center text-sm text-white/70">
         Just for fun — no fees, no wages, just a few silly swap deals on the table.
       </p>
+
+      {news.length > 0 && (
+        <Panel title="Transfer Deadline News" className="mb-3">
+          <ul className="max-h-40 divide-y divide-ink/10 overflow-y-auto text-sm">
+            {news.map((item, i) => (
+              <li key={i} className="px-1 py-1.5 text-ink/80">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       {offers.length === 0 && (
         <Panel className="mb-3">

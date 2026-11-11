@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CareerNav, type CareerScreenId } from '../components/layout/CareerNav';
 import { SQUADS_BY_CLUB_ID } from '../data/clubSquads';
 import { DEFAULT_FORMATION_ID, FORMATIONS } from '../data/formations';
@@ -29,6 +29,69 @@ const TRANSFER_FLAVOR_TEMPLATES: ((out: string, inP: string, inClub: string) => 
   (out, inP, inClub) => `${inClub} rang. Straight swap: ${inP} for ${out}. Take it or leave it, they said.`,
   (out, inP, inClub) => `Transfer deadline fever: ${out} to ${inClub} for ${inP}? Your board seems oddly keen.`,
 ];
+
+const TRANSFER_NEWS_TEMPLATES: ((outName: string, outClub: string, inName: string, inClub: string) => string)[] = [
+  (outName, outClub, inName, inClub) => `BREAKING: ${outClub} confirm ${outName} heads to ${inClub} in a straight swap for ${inName}.`,
+  (outName, outClub, inName, inClub) => `Deadline done: ${inName} joins ${outClub} from ${inClub}, with ${outName} going the other way.`,
+  (outName, outClub, inName, inClub) => `Surprise swap! ${outClub} and ${inClub} trade ${outName} for ${inName}.`,
+  (outName, outClub, inName, inClub) => `${outClub} and ${inClub} do a deadline deal: ${outName} out, ${inName} in.`,
+  (outName, outClub, inName, inClub) => `Here we go! ${inName} completes his move to ${outClub}, ${outName} going to ${inClub} to complete the swap.`,
+];
+
+/**
+ * Other clubs make their own moves too, not just the ones offered to you —
+ * a handful of silly swap deals happen between random OTHER clubs whenever
+ * a transfer window opens, applied straight to their squads (no offer/
+ * accept step, since it's not your business). Produces a short list of
+ * tabloid-style headlines for a "transfer deadline news feed." Same spirit
+ * as the player-facing transfer window: a fun addition, not a transfer
+ * market simulation.
+ */
+function simulateLeagueTransferActivity(
+  allSquads: Record<string, Player[]>,
+  excludeClubId: string,
+  count: number,
+): { updatedSquads: Record<string, Player[]>; news: string[] } {
+  const next = cloneSquads(allSquads);
+  const news: string[] = [];
+  const otherClubIds = Object.keys(next).filter((id) => id !== excludeClubId);
+  const usedPlayerIds = new Set<string>();
+
+  for (let i = 0; i < count; i++) {
+    const sellingClubId = otherClubIds[Math.floor(Math.random() * otherClubIds.length)];
+    const sellingSquad = next[sellingClubId] ?? [];
+    const outCandidates = sellingSquad.filter(
+      (p) => !usedPlayerIds.has(p.id) && sellingSquad.filter((q) => q.position === p.position).length > 1,
+    );
+    if (outCandidates.length === 0) continue;
+    const outPlayer = outCandidates[Math.floor(Math.random() * outCandidates.length)];
+
+    const buyingCandidates = otherClubIds.filter((id) => id !== sellingClubId);
+    let picked: { inPlayer: Player; buyingClubId: string } | null = null;
+    for (const buyingClubId of [...buyingCandidates].sort(() => Math.random() - 0.5)) {
+      const roster = next[buyingClubId] ?? [];
+      const samePosition = roster.filter((p) => p.position === outPlayer.position && !usedPlayerIds.has(p.id));
+      if (samePosition.length > 0) {
+        picked = { inPlayer: samePosition[Math.floor(Math.random() * samePosition.length)], buyingClubId };
+        break;
+      }
+    }
+    if (!picked) continue;
+
+    usedPlayerIds.add(outPlayer.id);
+    usedPlayerIds.add(picked.inPlayer.id);
+
+    next[sellingClubId] = next[sellingClubId].filter((p) => p.id !== outPlayer.id).concat(picked.inPlayer);
+    next[picked.buyingClubId] = next[picked.buyingClubId].filter((p) => p.id !== picked.inPlayer.id).concat(outPlayer);
+
+    const sellingName = PREMIER_LEAGUE_2008_09.find((c) => c.id === sellingClubId)?.shortName ?? sellingClubId;
+    const buyingName = PREMIER_LEAGUE_2008_09.find((c) => c.id === picked.buyingClubId)?.shortName ?? picked.buyingClubId;
+    const template = TRANSFER_NEWS_TEMPLATES[Math.floor(Math.random() * TRANSFER_NEWS_TEMPLATES.length)];
+    news.push(template(outPlayer.name, sellingName, picked.inPlayer.name, buyingName));
+  }
+
+  return { updatedSquads: next, news };
+}
 
 function getFormation(formationId: string) {
   return FORMATIONS.find((f) => f.id === formationId) ?? FORMATIONS[0];
@@ -152,11 +215,22 @@ export function CareerScreen({
   const [showingAnimation, setShowingAnimation] = useState(false);
 
   // Per-career mutable squads (starts as a copy of the shared static data) so
-  // transfer-window swaps only affect this playthrough, not the app-wide data.
-  const [allSquads, setAllSquads] = useState<Record<string, Player[]>>(() => cloneSquads(SQUADS_BY_CLUB_ID));
+  // transfer-window swaps only affect this playthrough, not the app-wide
+  // data. Other clubs make their own deadline-day moves too (see
+  // simulateLeagueTransferActivity) — applied here so the very first
+  // pre-season window already reflects it; the ref is just a same-render
+  // side channel so the news initializer below can read what this one
+  // generated, without rerolling a different random outcome.
+  const initialTransferNewsRef = useRef<string[]>([]);
+  const [allSquads, setAllSquads] = useState<Record<string, Player[]>>(() => {
+    const { updatedSquads, news } = simulateLeagueTransferActivity(cloneSquads(SQUADS_BY_CLUB_ID), club.id, 5);
+    initialTransferNewsRef.current = news;
+    return updatedSquads;
+  });
   const [transferWindow, setTransferWindow] = useState<'preseason' | 'january' | null>('preseason');
   const [januaryWindowShown, setJanuaryWindowShown] = useState(false);
   const [transferOffers, setTransferOffers] = useState<TransferOffer[]>(() => generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
+  const [transferNews, setTransferNews] = useState<string[]>(() => initialTransferNewsRef.current);
   const [seasonSummaryDismissed, setSeasonSummaryDismissed] = useState(false);
 
   const liveSquad = allSquads[club.id] ?? squad;
@@ -183,7 +257,10 @@ export function CareerScreen({
   }, [fixtures, club.id, allPlayerIndex]);
 
   function openTransferWindow(which: 'preseason' | 'january') {
-    setTransferOffers(generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
+    const { updatedSquads, news } = simulateLeagueTransferActivity(allSquads, club.id, 5);
+    setAllSquads(updatedSquads);
+    setTransferOffers(generateTransferOffers(club.id, updatedSquads, new Set(selectedXI)));
+    setTransferNews(news);
     setTransferWindow(which);
   }
 
@@ -305,6 +382,7 @@ export function CareerScreen({
       <TransferWindowScreen
         title={transferWindow === 'preseason' ? 'Pre-Season Transfer Window' : 'January Transfer Window'}
         offers={transferOffers}
+        news={transferNews}
         onAccept={acceptTransferOffer}
         onDecline={declineTransferOffer}
         onDone={() => setTransferWindow(null)}

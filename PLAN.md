@@ -722,3 +722,24 @@ players and were stuck. Root cause was two-fold, fixed both ways:
   the emergency-fallback branch itself was verified by code review and
   typecheck rather than forcing the ~3%-per-match injury roll to land on
   that exact single keeper within a reasonable test session.
+
+## Transfer deadline news feed + other clubs actually transfer now
+
+User asked whether other clubs get transfers too — answer was previously
+no: the only squad changes among AI clubs were as the counterparty to a
+swap generated for your own club (accepting an offer did move a player
+both ways, but no club ever did business independently). Added
+`simulateLeagueTransferActivity` in `CareerScreen.tsx`: whenever a transfer
+window opens (pre-season, January, and a new season's pre-season), a
+handful of random other clubs now make their own silly straight-swap
+deals with each other too — applied directly to their squads, no
+offer/accept step since it's not the player's business. Produces a short
+list of tabloid headlines ("BREAKING: MUN confirm Federico Macheda heads
+to LIV...") shown in a new "Transfer Deadline News" panel at the top of
+`TransferWindowScreen`, above the player's own offers. Same spirit as the
+rest of the transfer window: a fun addition, not a transfer-market
+simulation — AI-to-AI swaps aren't rating-aware, so an occasional headline
+reads as comically lopsided (a big name for a squad player), same as the
+player's own offers already could. Verified live: news renders correctly,
+the player's own accept/decline flow is unaffected, and squads genuinely
+update from the AI-to-AI swaps (not just cosmetic text).
