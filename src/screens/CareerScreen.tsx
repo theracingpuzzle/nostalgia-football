@@ -351,6 +351,7 @@ export function CareerScreen({
           xiReady={selectedXI.length === 11}
           onPlayNext={playNextFixture}
           onViewSeasonSummary={seasonComplete ? () => setSeasonSummaryDismissed(false) : undefined}
+          onViewTeamOfTheMonth={() => setScreen('totm')}
         />
       )}
 

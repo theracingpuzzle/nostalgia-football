@@ -1,8 +1,12 @@
+import { Fragment } from 'react';
 import { Button } from '../components/ui/Button';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
+import { SEASON_MONTHS } from '../data/seasonMonths';
 import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
 import type { Fixture } from '../engine/types';
+
+const MONTH_BY_FINAL_MATCHDAY = new Map(SEASON_MONTHS.map((m) => [m.matchdayEnd, m]));
 
 export function FixturesScreen({
   managedClubId,
@@ -10,12 +14,14 @@ export function FixturesScreen({
   xiReady,
   onPlayNext,
   onViewSeasonSummary,
+  onViewTeamOfTheMonth,
 }: {
   managedClubId: string;
   fixtures: Fixture[];
   xiReady: boolean;
   onPlayNext: () => void;
   onViewSeasonSummary?: () => void;
+  onViewTeamOfTheMonth?: () => void;
 }) {
   const myFixtures = fixtures.filter((f) => f.homeClubId === managedClubId || f.awayClubId === managedClubId);
   const nextUnplayed = fixtures.some((f) => !f.played);
@@ -53,27 +59,45 @@ export function FixturesScreen({
             const isHome = fixture.homeClubId === managedClubId;
             const opponentId = isHome ? fixture.awayClubId : fixture.homeClubId;
             const opponent = PREMIER_LEAGUE_2008_09.find((c) => c.id === opponentId);
+            const monthDue = MONTH_BY_FINAL_MATCHDAY.get(fixture.matchday);
             return (
-              <li key={fixture.id} className="flex items-center justify-between gap-2 px-1 py-2">
-                <span className="w-10 shrink-0 text-sm text-ink/60">MD{fixture.matchday}</span>
-                <span className="flex flex-1 items-center gap-2 font-bold">
-                  <span className="w-6 shrink-0 text-sm text-ink/60">{isHome ? 'vs' : '@'}</span>
-                  {opponent && (
-                    <ClubCrest primaryColor={opponent.primaryColor} secondaryColor={opponent.secondaryColor} label={opponent.shortName} crestPath={opponent.crestPath} size={26} />
-                  )}
-                  {opponent?.shortName}
-                </span>
-                <span className="flex items-center gap-2">
-                  {fixture.played && fixture.result ? (
-                    <>
-                      <span>{isHome ? `${fixture.result.homeGoals} - ${fixture.result.awayGoals}` : `${fixture.result.awayGoals} - ${fixture.result.homeGoals}`}</span>
-                      <OutcomeBadge myGoals={isHome ? fixture.result.homeGoals : fixture.result.awayGoals} oppGoals={isHome ? fixture.result.awayGoals : fixture.result.homeGoals} />
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </span>
-              </li>
+              <Fragment key={fixture.id}>
+                <li className="flex items-center justify-between gap-2 px-1 py-2">
+                  <span className="w-10 shrink-0 text-sm text-ink/60">MD{fixture.matchday}</span>
+                  <span className="flex flex-1 items-center gap-2 font-bold">
+                    <span className="w-6 shrink-0 text-sm text-ink/60">{isHome ? 'vs' : '@'}</span>
+                    {opponent && (
+                      <ClubCrest primaryColor={opponent.primaryColor} secondaryColor={opponent.secondaryColor} label={opponent.shortName} crestPath={opponent.crestPath} size={26} />
+                    )}
+                    {opponent?.shortName}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {fixture.played && fixture.result ? (
+                      <>
+                        <span>{isHome ? `${fixture.result.homeGoals} - ${fixture.result.awayGoals}` : `${fixture.result.awayGoals} - ${fixture.result.homeGoals}`}</span>
+                        <OutcomeBadge myGoals={isHome ? fixture.result.homeGoals : fixture.result.awayGoals} oppGoals={isHome ? fixture.result.awayGoals : fixture.result.homeGoals} />
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </span>
+                </li>
+                {monthDue && (
+                  <li className="bg-ink/5 px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-ink/60">
+                    {fixture.played ? (
+                      onViewTeamOfTheMonth ? (
+                        <button onClick={onViewTeamOfTheMonth} className="underline decoration-dotted underline-offset-2 hover:text-ink">
+                          🏆 {monthDue.name} Team of the Month ready — view it
+                        </button>
+                      ) : (
+                        <span>🏆 {monthDue.name} Team of the Month ready</span>
+                      )
+                    ) : (
+                      <span>🏆 {monthDue.name} Team of the Month due after this round</span>
+                    )}
+                  </li>
+                )}
+              </Fragment>
             );
           })}
         </ul>
