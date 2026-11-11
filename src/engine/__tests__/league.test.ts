@@ -53,6 +53,8 @@ describe('computeLeagueTable', () => {
         awayAssists: [],
         homeBookings: [],
         awayBookings: [],
+        homeRedCards: [],
+        awayRedCards: [],
         homeXI: [],
         awayXI: [],
         seed: 1,

@@ -10,17 +10,19 @@ export interface PlayerSeasonTotal {
   goals: number;
   assists: number;
   yellowCards: number;
+  redCards: number;
 }
 
-type SortKey = 'goals' | 'assists' | 'yellowCards';
+type SortKey = 'goals' | 'assists' | 'yellowCards' | 'redCards';
 
 const SORT_TABS: { key: SortKey; label: string }[] = [
   { key: 'goals', label: 'Goals' },
   { key: 'assists', label: 'Assists' },
   { key: 'yellowCards', label: 'Yellow Cards' },
+  { key: 'redCards', label: 'Red Cards' },
 ];
 
-/** League-wide season stats — goals, assists, and yellow cards per player, ranked by whichever column is selected. */
+/** League-wide season stats — goals, assists, yellow cards, and red cards per player, ranked by whichever column is selected. */
 export function StatsScreen({ stats, managedClubId }: { stats: PlayerSeasonTotal[]; managedClubId: string }) {
   const [sortBy, setSortBy] = useState<SortKey>('goals');
   const sorted = [...stats].filter((s) => s[sortBy] > 0).sort((a, b) => b[sortBy] - a[sortBy]);
@@ -57,6 +59,7 @@ export function StatsScreen({ stats, managedClubId }: { stats: PlayerSeasonTotal
                   <th className="px-2 py-1.5 text-right font-bold uppercase">G</th>
                   <th className="px-2 py-1.5 text-right font-bold uppercase">A</th>
                   <th className="px-2 py-1.5 text-right font-bold uppercase">YC</th>
+                  <th className="px-2 py-1.5 text-right font-bold uppercase">RC</th>
                 </tr>
               </thead>
               <tbody>
@@ -78,6 +81,7 @@ export function StatsScreen({ stats, managedClubId }: { stats: PlayerSeasonTotal
                       <td className={`px-2 py-1.5 text-right ${sortBy === 'goals' ? 'font-black' : ''}`}>{s.goals}</td>
                       <td className={`px-2 py-1.5 text-right ${sortBy === 'assists' ? 'font-black' : ''}`}>{s.assists}</td>
                       <td className={`px-2 py-1.5 text-right ${sortBy === 'yellowCards' ? 'font-black' : ''}`}>{s.yellowCards}</td>
+                      <td className={`px-2 py-1.5 text-right text-red-700 ${sortBy === 'redCards' ? 'font-black' : ''}`}>{s.redCards}</td>
                     </tr>
                   );
                 })}

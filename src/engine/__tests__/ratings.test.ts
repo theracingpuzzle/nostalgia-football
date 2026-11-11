@@ -31,6 +31,8 @@ function fixture(id: string, matchday: number, home: string, away: string, homeG
       awayAssists: [],
       homeBookings: [],
       awayBookings: [],
+      homeRedCards: [],
+      awayRedCards: [],
       homeXI: ['h-gk', 'h-def', 'h-fwd'],
       awayXI: ['a-gk', 'a-def', 'a-fwd'],
       seed: 1,

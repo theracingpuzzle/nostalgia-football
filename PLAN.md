@@ -638,3 +638,18 @@ original.
 - Coach's Help and the club overview screen both now show the return
   matchday next to an injured player's name (e.g. "Tim Howard (back MD10)"),
   not just the fact that they're out.
+
+## Red cards added to Stats
+
+The match engine already had yellow cards; red cards were missing entirely.
+Added as a new, much rarer independent event (`RED_CARD_RATE_PER_MINUTE`,
+tuned to roughly 1 every 15-ish matches) — not a second-yellow escalation,
+just its own rare roll, same lightweight spirit as the existing yellow-card
+mechanic. Tallied into `MatchResult.homeRedCards`/`awayRedCards` the same
+way goals/assists/bookings already are. The Stats screen gained a fourth
+sort tab ("Red Cards") alongside Goals/Assists/Yellow Cards, with a new RC
+column shown in red; the Match Events list on the full-time screen now
+bolds and reddens a "sent off" line the same way it already bolds goals.
+Does **not** reduce the sent-off player's team to 10 men for the rest of
+the match — purely a tracked stat, not a simulated numbers-disadvantage
+effect (same as yellow cards never did either).

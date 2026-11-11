@@ -7,6 +7,7 @@ const BASE_GOAL_RATE_PER_MINUTE = 0.0144; // tuned so two average sides average 
 const HOME_ADVANTAGE_MULTIPLIER = 1.15;
 const CHANCE_EVENT_RATE_PER_MINUTE = 0.02;
 const YELLOW_CARD_RATE_PER_MINUTE = 0.006;
+const RED_CARD_RATE_PER_MINUTE = 0.0007; // tuned so a red card is a rare, notable event (roughly 1 every 15-ish matches)
 const ASSIST_CHANCE = 0.82; // most goals have one; some are solo efforts/unassisted
 
 export interface SimulateMatchOptions {
@@ -63,6 +64,8 @@ export function simulateMatch({ fixtureId, home, away, seed, applyHomeAdvantage 
   const awayAssistMinutes = new Map<string, Scorer>();
   const homeBookingMinutes = new Map<string, Scorer>();
   const awayBookingMinutes = new Map<string, Scorer>();
+  const homeRedCardMinutes = new Map<string, Scorer>();
+  const awayRedCardMinutes = new Map<string, Scorer>();
 
   let homeGoals = 0;
   let awayGoals = 0;
@@ -118,6 +121,13 @@ export function simulateMatch({ fixtureId, home, away, seed, applyHomeAdvantage 
       events.push({ minute, type: 'yellow-card', side, playerId: player.id, playerName: player.name, description: `${player.name} is booked` });
       addTally(side === 'home' ? homeBookingMinutes : awayBookingMinutes, player.id, player.name, minute);
     }
+    if (random() < RED_CARD_RATE_PER_MINUTE) {
+      const side = random() < 0.5 ? 'home' : 'away';
+      const pool = side === 'home' ? home.selectedXI : away.selectedXI;
+      const player = weightedPick(random, pool, (p) => 100 - p.attributes.defending);
+      events.push({ minute, type: 'red-card', side, playerId: player.id, playerName: player.name, description: `${player.name} is sent off!` });
+      addTally(side === 'home' ? homeRedCardMinutes : awayRedCardMinutes, player.id, player.name, minute);
+    }
   }
 
   events.sort((a, b) => a.minute - b.minute);
@@ -133,6 +143,8 @@ export function simulateMatch({ fixtureId, home, away, seed, applyHomeAdvantage 
     awayAssists: [...awayAssistMinutes.values()],
     homeBookings: [...homeBookingMinutes.values()],
     awayBookings: [...awayBookingMinutes.values()],
+    homeRedCards: [...homeRedCardMinutes.values()],
+    awayRedCards: [...awayRedCardMinutes.values()],
     homeXI: home.selectedXI.map((p) => p.id),
     awayXI: away.selectedXI.map((p) => p.id),
     seed,

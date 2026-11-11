@@ -47,7 +47,7 @@ export function MatchResultScreen({ fixture, onContinue }: { fixture: Fixture; o
             <li key={i} className="flex gap-2 px-1 py-1.5">
               <span className="w-8 shrink-0 text-right text-ink/60">{event.minute}'</span>
               <span className="flex flex-col">
-                <span className={event.type === 'goal' ? 'font-bold' : ''}>{event.description}</span>
+                <span className={event.type === 'goal' ? 'font-bold' : event.type === 'red-card' ? 'font-bold text-red-700' : ''}>{event.description}</span>
                 {event.assistPlayerName && <span className="text-xs text-ink/60">assisted by {event.assistPlayerName}</span>}
               </span>
             </li>

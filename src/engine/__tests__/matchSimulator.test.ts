@@ -130,4 +130,25 @@ describe('simulateMatch', () => {
     }
     expect(foundABooking).toBe(true);
   });
+
+  it('records red-card events into the red cards tally, rarer than bookings', () => {
+    const home = makeTeam('home');
+    const away = makeTeam('away');
+    let foundARedCard = false;
+    let totalReds = 0;
+    let totalBookings = 0;
+    for (let seed = 0; seed < 50; seed++) {
+      const result = simulateMatch({ fixtureId: 'f1', home, away, seed });
+      const redEvents = result.events.filter((e) => e.type === 'red-card');
+      totalReds += redEvents.length;
+      totalBookings += result.events.filter((e) => e.type === 'yellow-card').length;
+      if (redEvents.length > 0) {
+        const tallied = result.homeRedCards.reduce((s, r) => s + r.minutes.length, 0) + result.awayRedCards.reduce((s, r) => s + r.minutes.length, 0);
+        expect(tallied).toBe(redEvents.length);
+        foundARedCard = true;
+      }
+    }
+    expect(foundARedCard).toBe(true);
+    expect(totalReds).toBeLessThan(totalBookings);
+  });
 });

@@ -40,7 +40,7 @@ function computeSeasonStats(fixtures: Fixture[]): PlayerSeasonTotal[] {
   function entry(playerId: string, playerName: string, clubId: string): PlayerSeasonTotal {
     const existing = totals.get(playerId);
     if (existing) return existing;
-    const fresh = { playerId, playerName, clubId, goals: 0, assists: 0, yellowCards: 0 };
+    const fresh = { playerId, playerName, clubId, goals: 0, assists: 0, yellowCards: 0, redCards: 0 };
     totals.set(playerId, fresh);
     return fresh;
   }
@@ -54,6 +54,8 @@ function computeSeasonStats(fixtures: Fixture[]): PlayerSeasonTotal[] {
     for (const a of result.awayAssists) entry(a.playerId, a.playerName, fixture.awayClubId).assists += a.minutes.length;
     for (const b of result.homeBookings) entry(b.playerId, b.playerName, fixture.homeClubId).yellowCards += b.minutes.length;
     for (const b of result.awayBookings) entry(b.playerId, b.playerName, fixture.awayClubId).yellowCards += b.minutes.length;
+    for (const r of result.homeRedCards) entry(r.playerId, r.playerName, fixture.homeClubId).redCards += r.minutes.length;
+    for (const r of result.awayRedCards) entry(r.playerId, r.playerName, fixture.awayClubId).redCards += r.minutes.length;
   }
 
   return [...totals.values()].sort((a, b) => b.goals - a.goals);

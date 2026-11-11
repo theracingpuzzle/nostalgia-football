@@ -59,7 +59,7 @@ export interface Fixture {
   result: MatchResult | null;
 }
 
-export type MatchEventType = 'goal' | 'chance' | 'yellow-card';
+export type MatchEventType = 'goal' | 'chance' | 'yellow-card' | 'red-card';
 
 export interface MatchEvent {
   minute: number;
@@ -95,6 +95,9 @@ export interface MatchResult {
   /** Yellow cards shown, aggregated the same way as scorers/assists. */
   homeBookings: PlayerMinuteTally[];
   awayBookings: PlayerMinuteTally[];
+  /** Red cards shown — much rarer than yellows. */
+  homeRedCards: PlayerMinuteTally[];
+  awayRedCards: PlayerMinuteTally[];
   /** Player ids who started this match for each side — needed to rate/credit everyone, not just scorers. */
   homeXI: string[];
   awayXI: string[];
