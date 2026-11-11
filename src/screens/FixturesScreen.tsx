@@ -9,27 +9,43 @@ export function FixturesScreen({
   fixtures,
   xiReady,
   onPlayNext,
+  onViewSeasonSummary,
 }: {
   managedClubId: string;
   fixtures: Fixture[];
   xiReady: boolean;
   onPlayNext: () => void;
+  onViewSeasonSummary?: () => void;
 }) {
   const myFixtures = fixtures.filter((f) => f.homeClubId === managedClubId || f.awayClubId === managedClubId);
   const nextUnplayed = fixtures.some((f) => !f.played);
+  const seasonComplete = fixtures.length > 0 && !nextUnplayed;
 
   return (
     <div className="mx-auto max-w-2xl p-4">
       <div className="mb-3 flex items-center justify-between text-white">
         <h2 className="text-xl font-black uppercase tracking-wide">Fixtures</h2>
-        <Button onClick={onPlayNext} disabled={!nextUnplayed || !xiReady}>
-          Play Next Fixture
-        </Button>
+        {!seasonComplete && (
+          <Button onClick={onPlayNext} disabled={!xiReady}>
+            Play Next Fixture
+          </Button>
+        )}
       </div>
-      {!xiReady && (
-        <p className="mb-3 rounded-sm border-2 border-amber-300 bg-amber-800 px-2 py-1.5 text-sm font-bold text-white">
-          Pick exactly 11 starters on the Team Selection screen before playing.
+      {seasonComplete ? (
+        <p className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm border-2 border-pitch bg-pitch-dark px-2 py-1.5 text-sm font-bold text-white">
+          Season complete!
+          {onViewSeasonSummary && (
+            <Button variant="secondary" onClick={onViewSeasonSummary}>
+              View Season Summary
+            </Button>
+          )}
         </p>
+      ) : (
+        !xiReady && (
+          <p className="mb-3 rounded-sm border-2 border-amber-300 bg-amber-800 px-2 py-1.5 text-sm font-bold text-white">
+            Pick exactly 11 starters on the Team Selection screen before playing.
+          </p>
+        )
       )}
       <Panel>
         <ul className="divide-y divide-ink/10 text-base">
@@ -47,12 +63,15 @@ export function FixturesScreen({
                   )}
                   {opponent?.shortName}
                 </span>
-                <span>
-                  {fixture.played && fixture.result
-                    ? isHome
-                      ? `${fixture.result.homeGoals} - ${fixture.result.awayGoals}`
-                      : `${fixture.result.awayGoals} - ${fixture.result.homeGoals}`
-                    : '—'}
+                <span className="flex items-center gap-2">
+                  {fixture.played && fixture.result ? (
+                    <>
+                      <span>{isHome ? `${fixture.result.homeGoals} - ${fixture.result.awayGoals}` : `${fixture.result.awayGoals} - ${fixture.result.homeGoals}`}</span>
+                      <OutcomeBadge myGoals={isHome ? fixture.result.homeGoals : fixture.result.awayGoals} oppGoals={isHome ? fixture.result.awayGoals : fixture.result.homeGoals} />
+                    </>
+                  ) : (
+                    '—'
+                  )}
                 </span>
               </li>
             );
@@ -61,4 +80,10 @@ export function FixturesScreen({
       </Panel>
     </div>
   );
+}
+
+function OutcomeBadge({ myGoals, oppGoals }: { myGoals: number; oppGoals: number }) {
+  const outcome = myGoals > oppGoals ? 'W' : myGoals === oppGoals ? 'D' : 'L';
+  const classes = outcome === 'W' ? 'bg-green-600 text-white' : outcome === 'D' ? 'bg-ink/40 text-white' : 'bg-red-700 text-white';
+  return <span className={`w-5 shrink-0 rounded-sm text-center text-xs font-black ${classes}`}>{outcome}</span>;
 }

@@ -11,6 +11,7 @@ import { LeagueTableScreen } from './LeagueTableScreen';
 import { MatchAnimationScreen } from './MatchAnimationScreen';
 import { MatchResultScreen } from './MatchResultScreen';
 import { ScorersScreen, type ScorerTotal } from './ScorersScreen';
+import { SeasonSummaryScreen } from './SeasonSummaryScreen';
 import { TeamOfTheMonthScreen } from './TeamOfTheMonthScreen';
 import { TeamSelectionScreen } from './TeamSelectionScreen';
 import { TransferWindowScreen, type TransferOffer } from './TransferWindowScreen';
@@ -137,12 +138,14 @@ export function CareerScreen({
   const [transferWindow, setTransferWindow] = useState<'preseason' | 'january' | null>('preseason');
   const [januaryWindowShown, setJanuaryWindowShown] = useState(false);
   const [transferOffers, setTransferOffers] = useState<TransferOffer[]>(() => generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
+  const [seasonSummaryDismissed, setSeasonSummaryDismissed] = useState(false);
 
   const liveSquad = allSquads[club.id] ?? squad;
   const table = useMemo(() => computeLeagueTable(ALL_CLUB_IDS, fixtures), [fixtures]);
   const topScorers = useMemo(() => computeTopScorers(fixtures).slice(0, 20), [fixtures]);
   const lastFixture = lastPlayedFixtureId ? fixtures.find((f) => f.id === lastPlayedFixtureId) ?? null : null;
   const leaguePosition = table.findIndex((r) => r.clubId === club.id) + 1;
+  const seasonComplete = fixtures.length > 0 && fixtures.every((f) => f.played);
 
   function openTransferWindow(which: 'preseason' | 'january') {
     setTransferOffers(generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
@@ -230,6 +233,17 @@ export function CareerScreen({
     setShowingAnimation(true);
   }
 
+  /** Fresh fixture list for the same 20 clubs; squads (and any transfers made) carry over. No promotion/relegation between divisions — see SeasonSummaryScreen. */
+  function startNewSeason() {
+    setFixtures(generateFixtures(ALL_CLUB_IDS));
+    setNextSeed(Math.floor(Math.random() * 1_000_000) + 1);
+    setLastPlayedFixtureId(null);
+    setShowingAnimation(false);
+    setJanuaryWindowShown(false);
+    setSeasonSummaryDismissed(false);
+    openTransferWindow('preseason');
+  }
+
   // Overlay content (transfer window / match animation / match result) renders
   // ON TOP of the persistent tree below, rather than replacing it via an early
   // return — TeamSelectionScreen must stay mounted continuously, or its
@@ -253,6 +267,20 @@ export function CareerScreen({
     } else {
       overlay = <MatchResultScreen fixture={lastFixture} onContinue={() => setLastPlayedFixtureId(null)} />;
     }
+  } else if (seasonComplete && !seasonSummaryDismissed) {
+    overlay = (
+      <SeasonSummaryScreen
+        club={club}
+        leagueRow={table.find((r) => r.clubId === club.id)}
+        leaguePosition={leaguePosition}
+        totalClubs={ALL_CLUB_IDS.length}
+        topScorers={topScorers}
+        fixtures={fixtures}
+        allSquads={allSquads}
+        onNewSeason={startNewSeason}
+        onClose={() => setSeasonSummaryDismissed(true)}
+      />
+    );
   }
 
   return (
@@ -284,7 +312,13 @@ export function CareerScreen({
       </div>
 
       {screen === 'fixtures' && (
-        <FixturesScreen managedClubId={club.id} fixtures={fixtures} xiReady={selectedXI.length === 11} onPlayNext={playNextFixture} />
+        <FixturesScreen
+          managedClubId={club.id}
+          fixtures={fixtures}
+          xiReady={selectedXI.length === 11}
+          onPlayNext={playNextFixture}
+          onViewSeasonSummary={seasonComplete ? () => setSeasonSummaryDismissed(false) : undefined}
+        />
       )}
 
       {screen === 'table' && <LeagueTableScreen table={table} managedClubId={club.id} />}

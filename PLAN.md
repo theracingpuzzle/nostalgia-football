@@ -511,3 +511,29 @@ addition, not a faithfulness claim.
   to their name is wherever they are *now*, not necessarily who they played
   for in that past match. Minor, and only visible once a player has actually
   moved mid-season.
+
+## End-of-season experience
+
+Previously, once all 38 fixtures were played, "Play Next Fixture" just quietly
+disabled itself with no explanation. Fixed:
+
+- **Season Summary screen**: pops up automatically the moment the last
+  fixture of the season is played (same overlay pattern as the match result
+  and transfer windows). Shows a headline based on final league position
+  (champions / Champions League / Europa / relegation / mid-table, reusing
+  the zone bands from `utils/leagueZones.ts`), the final W-D-L-GD-Pts record,
+  top 5 scorers, and a full-season "Team of the Season" (the exact same
+  `FormationXIPitch` component Team of the Month uses, just computed across
+  matchdays 1-38 instead of one month's block — extracted into
+  `components/ui/FormationXIPitch.tsx` so both screens share it).
+- Two buttons: **Review First** (dismiss and go look at the table/squad —
+  reopenable from Fixtures via a "View Season Summary" button) and
+  **Start New Season** (fresh fixture list for the same 20 clubs, resets the
+  January-window flag and seeds a new pre-season transfer window; squads —
+  including any transfers made — carry over as-is).
+- **Known limitation, flagged on the relegation headline**: there's no
+  promotion/relegation between divisions. A relegated club's next season
+  still starts back in the same 20-club Premier League — the game doesn't
+  model a second division. Said so directly on-screen, not just here.
+- **Fixtures list now shows a W/D/L badge** next to each played score (green/
+  grey/red), not just the raw scoreline — was hard to read at a glance.
