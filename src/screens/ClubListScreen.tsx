@@ -19,10 +19,6 @@ export function ClubListScreen({ onSelectClub }: { onSelectClub: (clubId: string
       <h2 className="mb-3 text-center text-2xl font-black uppercase tracking-wide">Premier League 2008/09</h2>
 
       <Panel>
-        <p className="mb-2 text-sm text-ink/70">
-          Pick a club to manage for the 2008/09 Premier League season. Clubs marked <strong>Squad TBD</strong> aren't
-          ready to play yet.
-        </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {CLUBS_ALPHABETICAL.map((club) => {
             const hasSquad = Boolean(SQUADS_BY_CLUB_ID[club.id]);
