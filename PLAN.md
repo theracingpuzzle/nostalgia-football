@@ -537,3 +537,38 @@ disabled itself with no explanation. Fixed:
   model a second division. Said so directly on-screen, not just here.
 - **Fixtures list now shows a W/D/L badge** next to each played score (green/
   grey/red), not just the raw scoreline — was hard to read at a glance.
+
+## Club overview, post-match landing, morale, and Stats (new additions)
+
+- **Club overview**: tap any row in the League Table to see that club's
+  season record plus a per-player breakdown (appearances, goals, average
+  rating) — `screens/ClubOverviewScreen.tsx`, works for any of the 20 clubs.
+- **Landing screen after a match**: continuing past a match result now
+  always returns to Team Selection (previously it left you wherever you'd
+  clicked "Play Next Fixture" from, usually Fixtures).
+- **Player morale** (`engine/ratings.ts` → `computePlayerMorale`): a new
+  addition — the original's actual morale mechanic, if it had one, isn't
+  confirmed/known. Rather than a separate tracked stat, morale is *derived*
+  from data already on hand: how much of the season a player's actually
+  played, and how well they've rated in it. A green/grey/red dot shows next
+  to each name in the Squad and Substitutes lists (with a legend), and
+  Coach's Help now calls out specific players: who's unsettled from lack of
+  game time, who's short of confidence despite playing regularly, and —new—
+  a concrete "in great form, not in your XI yet" nudge naming an actual
+  player. Thresholds are set relative to the rating formula's 6.0 baseline
+  (not hugging it), otherwise ordinary average performances constantly
+  misfire as good or bad — caught and fixed this round after first shipping
+  with a threshold that flagged nearly the entire first-team as "unsettled."
+- **Stats screen** (replaces Scorers): still goals, now also **assists** and
+  **yellow cards**, with tabs to re-sort the same table by whichever column.
+  Required extending the match engine: goals can now carry an assist (~82%
+  do, weighted toward midfielders/passing — the rest are "solo" goals), and
+  yellow-card events are now tallied per player across the season the same
+  way goals always were (`MatchResult.homeAssists/awayAssists/homeBookings/
+  awayBookings`, all added to `homeXI`/`awayXI` as required fields).
+- **Team of the Month/Season formation is no longer fixed at 4-3-3**: it now
+  tries every formation the game itself offers (4-4-2/4-3-3/3-5-2/4-5-1) for
+  that block of performances and picks whichever yields the strongest XI —
+  so a month heavy on good forwards and light on standout defenders might
+  come back as a 3-5-2 instead. Confirmed live: September came back as a
+  genuine 3-5-2 rather than the old hardcoded shape.

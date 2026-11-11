@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { FormationXIPitch } from '../components/ui/FormationXIPitch';
 import { Panel } from '../components/ui/Panel';
+import { FORMATIONS } from '../data/formations';
 import { SEASON_MONTHS } from '../data/seasonMonths';
 import { computeMonthlyPlayerStats, pickTeamOfTheMonth } from '../engine';
 import type { Fixture, Player } from '../engine/types';
@@ -18,10 +19,11 @@ function latestMonthWithData(fixtures: Fixture[]): number {
 /**
  * League-wide "Team of the Month" — a new addition, not a reconstruction of
  * anything from the original (which almost certainly never had this). Picks
- * a 4-3-3 shaped XI (plus the keeper) from whoever played that block of matchdays, ranked by
- * a lightweight post-match rating (see engine/ratings.ts) with goals scored
- * weighted in on top. Flagged here the same way the transfer window is —
- * a fun addition, not a faithfulness claim.
+ * whichever of the game's own formations (4-4-2/4-3-3/3-5-2/4-5-1) best fits
+ * that block of matchdays' standout performances, ranked by a lightweight
+ * post-match rating (see engine/ratings.ts) with goals scored weighted in
+ * on top. Flagged here the same way the transfer window is — a fun
+ * addition, not a faithfulness claim.
  */
 export function TeamOfTheMonthScreen({ fixtures, allSquads, managedClubId }: { fixtures: Fixture[]; allSquads: Record<string, Player[]>; managedClubId: string }) {
   const [monthIndex, setMonthIndex] = useState(() => latestMonthWithData(fixtures));
@@ -37,7 +39,7 @@ export function TeamOfTheMonthScreen({ fixtures, allSquads, managedClubId }: { f
 
   const totm = useMemo(() => {
     const stats = computeMonthlyPlayerStats(fixtures, month.matchdayStart, month.matchdayEnd, (id) => playerIndex.get(id));
-    return pickTeamOfTheMonth(stats);
+    return pickTeamOfTheMonth(stats, FORMATIONS);
   }, [fixtures, month, playerIndex]);
 
   return (
@@ -59,11 +61,11 @@ export function TeamOfTheMonthScreen({ fixtures, allSquads, managedClubId }: { f
         </Button>
       </div>
 
-      <Panel title="4-3-3">
-        {totm.length === 0 ? (
+      <Panel title={totm.players.length > 0 ? totm.formationName : 'No data yet'}>
+        {totm.players.length === 0 ? (
           <p className="p-3 text-center text-sm text-ink/70">No matches played in this block of fixtures yet.</p>
         ) : (
-          <FormationXIPitch entries={totm} managedClubId={managedClubId} />
+          <FormationXIPitch entries={totm.players} managedClubId={managedClubId} />
         )}
       </Panel>
     </div>

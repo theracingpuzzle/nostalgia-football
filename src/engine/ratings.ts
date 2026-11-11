@@ -1,4 +1,4 @@
-import type { Fixture, Player, Position } from './types';
+import type { Fixture, Formation, Player, Position } from './types';
 
 /** Deterministic 0-1 value from a string, so the same fixture+player always gets the same bit of variance rather than re-rolling on every render. */
 function hash01(input: string): number {
@@ -121,26 +121,81 @@ export function computeMonthlyPlayerStats(
   return rows;
 }
 
-const TOTM_FORMATION: { position: Position; count: number }[] = [
-  { position: 'GK', count: 1 },
-  { position: 'DEF', count: 4 },
-  { position: 'MID', count: 3 },
-  { position: 'FWD', count: 3 },
-];
+export type MoraleTone = 'good' | 'neutral' | 'bad';
+
+export interface MoraleInfo {
+  label: string;
+  tone: MoraleTone;
+}
 
 /**
- * Picks a Team of the Month in a fixed 4-3-3 shape plus the keeper (the shape real
- * end-of-month team graphics typically use), ranked by average rating with
- * goals scored weighted in on top — matching "realistic, based on goals
- * scored etc." Not pulled from any confirmed source for the original game;
- * this whole feature is a new addition.
+ * A new addition — the original's actual morale mechanic (if it had one)
+ * isn't confirmed/known, see PLAN.md. Rather than a separate hidden stat to
+ * track, this derives a mood straight from data already on hand: how much
+ * game time a player's had this season and how well they've played in it.
+ * Benched players who aren't getting a run out sour; regulars playing well
+ * are buzzing; regulars playing poorly lose confidence. Nothing is modeled
+ * before the season has any games played yet.
  */
-export function pickTeamOfTheMonth(stats: MonthlyPlayerStat[]): MonthlyPlayerStat[] {
+export function computePlayerMorale(stat: MonthlyPlayerStat | undefined, teamGamesPlayed: number): MoraleInfo {
+  if (teamGamesPlayed === 0) return { label: 'Fresh start', tone: 'neutral' };
+
+  const appearances = stat?.appearances ?? 0;
+  const appearanceRate = appearances / teamGamesPlayed;
+  const rating = stat?.averageRating ?? 0;
+
+  // Rating formula's baseline is 6.0 (see computeMatchRating), so thresholds
+  // sit meaningfully above/below that rather than hugging it — otherwise
+  // ordinary average performances would constantly misfire as good or bad.
+  if (teamGamesPlayed >= 3 && appearanceRate < 0.34) return { label: 'Unsettled — wants game time', tone: 'bad' };
+  if (appearanceRate >= 0.5 && rating >= 6.8) return { label: 'Buzzing', tone: 'good' };
+  if (appearanceRate >= 0.5 && rating > 0 && rating < 5.3) return { label: 'Low confidence', tone: 'bad' };
+  if (appearanceRate >= 0.5) return { label: 'Settled', tone: 'good' };
+  return { label: 'Content', tone: 'neutral' };
+}
+
+export interface TeamOfThePeriod {
+  /** e.g. "4-3-3" — whichever candidate formation scored best for this set of performances. */
+  formationName: string;
+  players: MonthlyPlayerStat[];
+}
+
+/**
+ * Picks a Team of the Month/Season, ranked by average rating with goals
+ * scored weighted in on top — matching "realistic, based on goals scored
+ * etc." The shape isn't fixed: every formation in `candidateFormations` is
+ * tried, and whichever one yields the strongest total XI for this
+ * particular set of performances wins — so a month full of good forwards
+ * and thin on defenders might come out as a 3-5-2 rather than 4-3-3, the
+ * same way a real end-of-month team varies. Not pulled from any confirmed
+ * source for the original game; this whole feature is a new addition.
+ */
+export function pickTeamOfTheMonth(stats: MonthlyPlayerStat[], candidateFormations: Formation[]): TeamOfThePeriod {
   const score = (s: MonthlyPlayerStat) => s.averageRating + s.goals * 0.3;
-  const picked: MonthlyPlayerStat[] = [];
-  for (const { position, count } of TOTM_FORMATION) {
-    const candidates = stats.filter((s) => s.position === position).sort((a, b) => score(b) - score(a));
-    picked.push(...candidates.slice(0, count));
+  const byPosition = new Map<Position, MonthlyPlayerStat[]>();
+  for (const s of stats) {
+    const list = byPosition.get(s.position) ?? [];
+    list.push(s);
+    byPosition.set(s.position, list);
   }
-  return picked;
+  for (const list of byPosition.values()) list.sort((a, b) => score(b) - score(a));
+
+  let best: TeamOfThePeriod = { formationName: candidateFormations[0]?.name ?? '', players: [] };
+  let bestScore = -Infinity;
+
+  for (const formation of candidateFormations) {
+    const picked: MonthlyPlayerStat[] = [];
+    let total = 0;
+    for (const slot of formation.slots) {
+      const candidates = (byPosition.get(slot.position) ?? []).slice(0, slot.count);
+      picked.push(...candidates);
+      total += candidates.reduce((sum, c) => sum + score(c), 0);
+    }
+    if (total > bestScore) {
+      bestScore = total;
+      best = { formationName: formation.name, players: picked };
+    }
+  }
+
+  return best;
 }

@@ -4,14 +4,14 @@ import { SQUADS_BY_CLUB_ID } from '../data/clubSquads';
 import { DEFAULT_FORMATION_ID, FORMATIONS } from '../data/formations';
 import type { ClubListing } from '../data/premierLeague0809';
 import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
-import { computeLeagueTable, generateFixtures, pickBestXI, simulateMatch } from '../engine';
+import { computeLeagueTable, computeMonthlyPlayerStats, generateFixtures, pickBestXI, simulateMatch } from '../engine';
 import type { Fixture, Player } from '../engine/types';
 import { FixturesScreen } from './FixturesScreen';
 import { LeagueTableScreen } from './LeagueTableScreen';
 import { MatchAnimationScreen } from './MatchAnimationScreen';
 import { MatchResultScreen } from './MatchResultScreen';
-import { ScorersScreen, type ScorerTotal } from './ScorersScreen';
 import { SeasonSummaryScreen } from './SeasonSummaryScreen';
+import { StatsScreen, type PlayerSeasonTotal } from './StatsScreen';
 import { TeamOfTheMonthScreen } from './TeamOfTheMonthScreen';
 import { TeamSelectionScreen } from './TeamSelectionScreen';
 import { TransferWindowScreen, type TransferOffer } from './TransferWindowScreen';
@@ -34,19 +34,26 @@ function getFormation(formationId: string) {
   return FORMATIONS.find((f) => f.id === formationId) ?? FORMATIONS[0];
 }
 
-function computeTopScorers(fixtures: Fixture[]): ScorerTotal[] {
-  const totals = new Map<string, ScorerTotal>();
+function computeSeasonStats(fixtures: Fixture[]): PlayerSeasonTotal[] {
+  const totals = new Map<string, PlayerSeasonTotal>();
 
-  function addGoals(playerId: string, playerName: string, clubId: string, goals: number) {
+  function entry(playerId: string, playerName: string, clubId: string): PlayerSeasonTotal {
     const existing = totals.get(playerId);
-    if (existing) existing.goals += goals;
-    else totals.set(playerId, { playerId, playerName, clubId, goals });
+    if (existing) return existing;
+    const fresh = { playerId, playerName, clubId, goals: 0, assists: 0, yellowCards: 0 };
+    totals.set(playerId, fresh);
+    return fresh;
   }
 
   for (const fixture of fixtures) {
     if (!fixture.played || !fixture.result) continue;
-    for (const scorer of fixture.result.homeScorers) addGoals(scorer.playerId, scorer.playerName, fixture.homeClubId, scorer.minutes.length);
-    for (const scorer of fixture.result.awayScorers) addGoals(scorer.playerId, scorer.playerName, fixture.awayClubId, scorer.minutes.length);
+    const { result } = fixture;
+    for (const s of result.homeScorers) entry(s.playerId, s.playerName, fixture.homeClubId).goals += s.minutes.length;
+    for (const s of result.awayScorers) entry(s.playerId, s.playerName, fixture.awayClubId).goals += s.minutes.length;
+    for (const a of result.homeAssists) entry(a.playerId, a.playerName, fixture.homeClubId).assists += a.minutes.length;
+    for (const a of result.awayAssists) entry(a.playerId, a.playerName, fixture.awayClubId).assists += a.minutes.length;
+    for (const b of result.homeBookings) entry(b.playerId, b.playerName, fixture.homeClubId).yellowCards += b.minutes.length;
+    for (const b of result.awayBookings) entry(b.playerId, b.playerName, fixture.awayClubId).yellowCards += b.minutes.length;
   }
 
   return [...totals.values()].sort((a, b) => b.goals - a.goals);
@@ -142,10 +149,26 @@ export function CareerScreen({
 
   const liveSquad = allSquads[club.id] ?? squad;
   const table = useMemo(() => computeLeagueTable(ALL_CLUB_IDS, fixtures), [fixtures]);
-  const topScorers = useMemo(() => computeTopScorers(fixtures).slice(0, 20), [fixtures]);
+  const leagueSeasonTotals = useMemo(() => computeSeasonStats(fixtures), [fixtures]);
+  const topScorers = useMemo(() => leagueSeasonTotals.slice(0, 20), [leagueSeasonTotals]);
   const lastFixture = lastPlayedFixtureId ? fixtures.find((f) => f.id === lastPlayedFixtureId) ?? null : null;
   const leaguePosition = table.findIndex((r) => r.clubId === club.id) + 1;
   const seasonComplete = fixtures.length > 0 && fixtures.every((f) => f.played);
+
+  const allPlayerIndex = useMemo(() => {
+    const map = new Map<string, { player: Player; clubId: string }>();
+    for (const [clubId, players] of Object.entries(allSquads)) {
+      for (const player of players) map.set(player.id, { player, clubId });
+    }
+    return map;
+  }, [allSquads]);
+
+  const managedClubGamesPlayed = table.find((r) => r.clubId === club.id)?.played ?? 0;
+  const managedClubSeasonStats = useMemo(() => {
+    const clubFixtures = fixtures.filter((f) => f.homeClubId === club.id || f.awayClubId === club.id);
+    const stats = computeMonthlyPlayerStats(clubFixtures, 1, 38, (id) => allPlayerIndex.get(id));
+    return new Map(stats.map((s) => [s.playerId, s]));
+  }, [fixtures, club.id, allPlayerIndex]);
 
   function openTransferWindow(which: 'preseason' | 'january') {
     setTransferOffers(generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
@@ -265,7 +288,15 @@ export function CareerScreen({
     if (showingAnimation && homeClub && awayClub) {
       overlay = <MatchAnimationScreen fixture={lastFixture} homeClub={homeClub} awayClub={awayClub} onFinished={() => setShowingAnimation(false)} />;
     } else {
-      overlay = <MatchResultScreen fixture={lastFixture} onContinue={() => setLastPlayedFixtureId(null)} />;
+      overlay = (
+        <MatchResultScreen
+          fixture={lastFixture}
+          onContinue={() => {
+            setLastPlayedFixtureId(null);
+            setScreen('team');
+          }}
+        />
+      );
     }
   } else if (seasonComplete && !seasonSummaryDismissed) {
     overlay = (
@@ -303,6 +334,8 @@ export function CareerScreen({
           secondaryColor={club.secondaryColor}
           crestPath={club.crestPath}
           squad={liveSquad}
+          seasonStats={managedClubSeasonStats}
+          teamGamesPlayed={managedClubGamesPlayed}
           onTeamChange={(nextFormationId, xiIds) => {
             setFormationId(nextFormationId);
             setSelectedXI(xiIds);
@@ -323,7 +356,7 @@ export function CareerScreen({
 
       {screen === 'table' && <LeagueTableScreen table={table} managedClubId={club.id} fixtures={fixtures} allSquads={allSquads} />}
 
-      {screen === 'scorers' && <ScorersScreen scorers={topScorers} managedClubId={club.id} />}
+      {screen === 'stats' && <StatsScreen stats={leagueSeasonTotals} managedClubId={club.id} />}
 
       {screen === 'totm' && <TeamOfTheMonthScreen fixtures={fixtures} allSquads={allSquads} managedClubId={club.id} />}
 

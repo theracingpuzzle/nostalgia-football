@@ -97,4 +97,37 @@ describe('simulateMatch', () => {
     expect(homeGoalEvents.length).toBe(result.homeGoals);
     expect(totalHomeScorerGoals).toBe(result.homeGoals);
   });
+
+  it('most (not all) goals get an assist, from a teammate rather than the scorer', () => {
+    const home = makeTeam('home');
+    const away = makeTeam('away');
+    let totalGoals = 0;
+    let totalAssists = 0;
+    for (let seed = 0; seed < 50; seed++) {
+      const result = simulateMatch({ fixtureId: 'f1', home, away, seed });
+      totalGoals += result.homeGoals + result.awayGoals;
+      totalAssists += result.homeAssists.reduce((s, a) => s + a.minutes.length, 0) + result.awayAssists.reduce((s, a) => s + a.minutes.length, 0);
+      for (const event of result.events) {
+        if (event.type === 'goal' && event.assistPlayerId) expect(event.assistPlayerId).not.toBe(event.playerId);
+      }
+    }
+    expect(totalAssists).toBeGreaterThan(0);
+    expect(totalAssists).toBeLessThan(totalGoals);
+  });
+
+  it('records yellow-card events into the bookings tally', () => {
+    const home = makeTeam('home');
+    const away = makeTeam('away');
+    let foundABooking = false;
+    for (let seed = 0; seed < 50 && !foundABooking; seed++) {
+      const result = simulateMatch({ fixtureId: 'f1', home, away, seed });
+      const bookingEvents = result.events.filter((e) => e.type === 'yellow-card');
+      const totalBookings = result.homeBookings.reduce((s, b) => s + b.minutes.length, 0) + result.awayBookings.reduce((s, b) => s + b.minutes.length, 0);
+      if (bookingEvents.length > 0) {
+        expect(totalBookings).toBe(bookingEvents.length);
+        foundABooking = true;
+      }
+    }
+    expect(foundABooking).toBe(true);
+  });
 });

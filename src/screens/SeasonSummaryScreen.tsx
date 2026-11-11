@@ -3,11 +3,12 @@ import { Button } from '../components/ui/Button';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { FormationXIPitch } from '../components/ui/FormationXIPitch';
 import { Panel } from '../components/ui/Panel';
+import { FORMATIONS } from '../data/formations';
 import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
 import { computeMonthlyPlayerStats, pickTeamOfTheMonth } from '../engine';
 import type { Fixture, LeagueTableRow, Player } from '../engine/types';
 import { getLeagueZone, ordinal } from '../utils/leagueZones';
-import type { ScorerTotal } from './ScorersScreen';
+import type { PlayerSeasonTotal } from './StatsScreen';
 
 const HEADLINES: Record<'champion' | 'champions' | 'europa' | 'relegation' | 'mid', { title: string; tone: string }> = {
   champion: { title: '🏆 Champions!', tone: 'bg-amber-400 text-ink border-amber-600' },
@@ -39,7 +40,7 @@ export function SeasonSummaryScreen({
   leagueRow: LeagueTableRow | undefined;
   leaguePosition: number;
   totalClubs: number;
-  topScorers: ScorerTotal[];
+  topScorers: PlayerSeasonTotal[];
   fixtures: Fixture[];
   allSquads: Record<string, Player[]>;
   onNewSeason: () => void;
@@ -59,7 +60,7 @@ export function SeasonSummaryScreen({
 
   const teamOfSeason = useMemo(() => {
     const stats = computeMonthlyPlayerStats(fixtures, 1, 38, (id) => playerIndex.get(id));
-    return pickTeamOfTheMonth(stats);
+    return pickTeamOfTheMonth(stats, FORMATIONS);
   }, [fixtures, playerIndex]);
 
   return (
@@ -112,8 +113,12 @@ export function SeasonSummaryScreen({
         </Panel>
       )}
 
-      <Panel title="Team of the Season (4-3-3)" className="mb-3">
-        {teamOfSeason.length === 0 ? <p className="p-3 text-center text-sm text-ink/70">Not enough matches played to pick one.</p> : <FormationXIPitch entries={teamOfSeason} managedClubId={club.id} />}
+      <Panel title={teamOfSeason.players.length > 0 ? `Team of the Season (${teamOfSeason.formationName})` : 'Team of the Season'} className="mb-3">
+        {teamOfSeason.players.length === 0 ? (
+          <p className="p-3 text-center text-sm text-ink/70">Not enough matches played to pick one.</p>
+        ) : (
+          <FormationXIPitch entries={teamOfSeason.players} managedClubId={club.id} />
+        )}
       </Panel>
 
       <div className="flex justify-center gap-3">

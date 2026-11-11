@@ -4,7 +4,7 @@ import { ClubCrest } from '../components/ui/ClubCrest';
 import { GoalFrame } from '../components/ui/GoalFrame';
 import { Panel } from '../components/ui/Panel';
 import { FORMATIONS, DEFAULT_FORMATION_ID } from '../data/formations';
-import { expandSlots, pickBestXI } from '../engine';
+import { computePlayerMorale, expandSlots, pickBestXI, type MonthlyPlayerStat, type MoraleInfo } from '../engine';
 import type { Formation, Player, Position } from '../engine/types';
 import { getContrastTextColor } from '../utils/colorContrast';
 
@@ -75,6 +75,10 @@ interface TeamSelectionScreenProps {
   secondaryColor: string;
   crestPath?: string;
   squad: Player[];
+  /** This season's per-player stats so far (appearances/goals/rating), used to derive morale and coach advice. Omit (or pass an empty map) if unavailable. */
+  seasonStats?: Map<string, MonthlyPlayerStat>;
+  /** How many of this club's fixtures have been played this season — morale needs this to judge "rarely used" relative to the season length. */
+  teamGamesPlayed?: number;
   /** Fires whenever the chosen formation or XI changes, so a parent can use it elsewhere (e.g. simulating a match) without a separate "save" step. */
   onTeamChange?: (formationId: string, xiPlayerIds: string[]) => void;
   /** Optional shortcut button, e.g. to jump to the Fixtures screen. Omit to hide it. */
@@ -106,6 +110,8 @@ export function TeamSelectionScreen({
   secondaryColor,
   crestPath,
   squad,
+  seasonStats,
+  teamGamesPlayed = 0,
   onTeamChange,
   onContinue,
 }: TeamSelectionScreenProps) {
@@ -144,6 +150,31 @@ export function TeamSelectionScreen({
   const xiIds = useMemo(() => new Set(slots.map((s) => s.playerId).filter((id): id is string => id !== null)), [slots]);
   const substitutes = squad.filter((p) => !xiIds.has(p.id));
   const injuredPlayers = useMemo(() => squad.filter((p) => p.injured), [squad]);
+
+  const moraleByPlayerId = useMemo(() => {
+    const map = new Map<string, MoraleInfo>();
+    for (const p of squad) map.set(p.id, computePlayerMorale(seasonStats?.get(p.id), teamGamesPlayed));
+    return map;
+  }, [squad, seasonStats, teamGamesPlayed]);
+
+  const unsettledPlayers = useMemo(
+    () => squad.filter((p) => !p.injured && moraleByPlayerId.get(p.id)?.label.startsWith('Unsettled')),
+    [squad, moraleByPlayerId],
+  );
+  const lowConfidencePlayers = useMemo(
+    () => squad.filter((p) => !p.injured && moraleByPlayerId.get(p.id)?.label === 'Low confidence'),
+    [squad, moraleByPlayerId],
+  );
+
+  /** Best-rated available player not currently in the XI — a concrete, actionable nudge rather than just a squad summary. */
+  const inFormSuggestion = useMemo(() => {
+    const candidates = squad
+      .filter((p) => !p.injured && !xiIds.has(p.id))
+      .map((p) => ({ player: p, stat: seasonStats?.get(p.id) }))
+      .filter((c) => c.stat && c.stat.appearances > 0 && c.stat.averageRating >= 7)
+      .sort((a, b) => (b.stat?.averageRating ?? 0) - (a.stat?.averageRating ?? 0));
+    return candidates[0];
+  }, [squad, xiIds, seasonStats]);
 
   const onTeamChangeRef = useRef(onTeamChange);
   onTeamChangeRef.current = onTeamChange;
@@ -252,14 +283,25 @@ export function TeamSelectionScreen({
 
           <Panel title="Coach says..." accentColor={primaryColor}>
             {showCoachAdvice ? (
-              <ul className="list-disc space-y-0.5 pl-4 text-xs text-ink/80">
+              <ul className="list-disc space-y-1 pl-4 text-xs text-ink/80">
                 {injuredPlayers.length > 0 ? (
-                  <li>Injured men: {injuredPlayers.map((p) => p.name).join(', ')}</li>
+                  <li>Injured: {injuredPlayers.map((p) => p.name).join(', ')}</li>
                 ) : (
                   <li>No fresh injury concerns.</li>
                 )}
+                {unsettledPlayers.length > 0 && (
+                  <li>Unsettled, wants game time: {unsettledPlayers.map((p) => p.name).join(', ')}</li>
+                )}
+                {lowConfidencePlayers.length > 0 && (
+                  <li>Short of confidence lately: {lowConfidencePlayers.map((p) => p.name).join(', ')}</li>
+                )}
+                {inFormSuggestion && (
+                  <li>
+                    In great form: <strong>{inFormSuggestion.player.name}</strong> ({inFormSuggestion.stat?.averageRating.toFixed(1)} avg) isn't in your XI yet.
+                  </li>
+                )}
                 <li className="list-none pl-0 text-[10px] italic text-ink/50">
-                  (Form notes like the original's aren't modeled — no real "form" data to base them on.)
+                  (Morale and form here are a new addition, worked out from this season's appearances and ratings — not confirmed from the original.)
                 </li>
               </ul>
             ) : (
@@ -353,13 +395,24 @@ export function TeamSelectionScreen({
                 }}
               >
                 {substitutes.map((p) => (
-                  <DraggableRow key={p.id} player={p} isSelected={p.id === selectedPlayerId} onTap={() => handleTap(p.id, null)} />
+                  <DraggableRow key={p.id} player={p} morale={moraleByPlayerId.get(p.id)} isSelected={p.id === selectedPlayerId} onTap={() => handleTap(p.id, null)} />
                 ))}
               </ul>
             </Panel>
           </div>
 
           <Panel title="Squad" accentColor={primaryColor}>
+            <div className="mb-1.5 flex items-center gap-3 text-[10px] text-ink/60">
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-green-500" /> Good morale
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-gray-400" /> Neutral
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-red-500" /> Unhappy
+              </span>
+            </div>
             <ul
               className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto text-sm sm:grid-cols-2 md:grid-cols-3"
               onDragOver={(e) => e.preventDefault()}
@@ -376,6 +429,7 @@ export function TeamSelectionScreen({
                     player={p}
                     highlight={inXI}
                     highlightColor={primaryColor}
+                    morale={moraleByPlayerId.get(p.id)}
                     isSelected={p.id === selectedPlayerId}
                     onTap={() => handleTap(p.id, null)}
                   />
@@ -389,16 +443,24 @@ export function TeamSelectionScreen({
   );
 }
 
+const MORALE_DOT_CLASS: Record<MoraleInfo['tone'], string> = {
+  good: 'bg-green-500',
+  neutral: 'bg-gray-400',
+  bad: 'bg-red-500',
+};
+
 function DraggableRow({
   player,
   highlight,
   highlightColor,
+  morale,
   isSelected,
   onTap,
 }: {
   player: Player;
   highlight?: boolean;
   highlightColor?: string;
+  morale?: MoraleInfo;
   isSelected?: boolean;
   onTap?: () => void;
 }) {
@@ -407,6 +469,7 @@ function DraggableRow({
       draggable={!player.injured}
       onDragStart={(e) => e.dataTransfer.setData('text/plain', player.id)}
       onClick={player.injured ? undefined : onTap}
+      title={morale?.label}
       className={`flex items-center justify-between rounded-sm border-2 px-2 py-1.5 ${
         player.injured
           ? 'cursor-not-allowed border-pink-400 bg-pink-200 text-pink-900'
@@ -414,7 +477,10 @@ function DraggableRow({
       } ${isSelected ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}
       style={highlight && !player.injured && highlightColor ? { borderColor: highlightColor } : undefined}
     >
-      <span>{player.name}</span>
+      <span className="flex items-center gap-1.5">
+        {morale && <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${MORALE_DOT_CLASS[morale.tone]}`} />}
+        {player.name}
+      </span>
       <span className="text-xs uppercase text-ink/60">{player.position}</span>
     </li>
   );

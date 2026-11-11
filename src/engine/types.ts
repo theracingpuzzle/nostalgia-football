@@ -65,6 +65,9 @@ export interface MatchEvent {
   side: 'home' | 'away';
   playerId?: string;
   playerName?: string;
+  /** Goal events only, and only when the goal had one. */
+  assistPlayerId?: string;
+  assistPlayerName?: string;
   description: string;
 }
 
@@ -74,6 +77,9 @@ export interface Scorer {
   minutes: number[];
 }
 
+/** Same shape as Scorer — a player plus which minutes something happened to them. Used for assists and bookings too, not just goals. */
+export type PlayerMinuteTally = Scorer;
+
 export interface MatchResult {
   fixtureId: string;
   homeGoals: number;
@@ -81,6 +87,12 @@ export interface MatchResult {
   events: MatchEvent[];
   homeScorers: Scorer[];
   awayScorers: Scorer[];
+  /** Who provided the assist, where a goal had one — not every goal does. */
+  homeAssists: PlayerMinuteTally[];
+  awayAssists: PlayerMinuteTally[];
+  /** Yellow cards shown, aggregated the same way as scorers/assists. */
+  homeBookings: PlayerMinuteTally[];
+  awayBookings: PlayerMinuteTally[];
   /** Player ids who started this match for each side — needed to rate/credit everyone, not just scorers. */
   homeXI: string[];
   awayXI: string[];
