@@ -69,11 +69,30 @@ function fillEmptySlotsWithCoachPick(
     pickByPosition.set(player.position, list);
   }
 
-  return slots.map((slot) => {
+  const filled = slots.map((slot) => {
     if (slot.playerId !== null) return slot;
     const player = pickByPosition.get(slot.position)?.shift();
     return player ? { ...slot, playerId: player.id } : slot;
   });
+
+  // Emergency keeper: if a club's recognized goalkeepers are all injured —
+  // a real, if rare, football scenario — the GK slot would otherwise sit
+  // permanently empty with no way to field a full XI. Only kicks in when
+  // there's truly no fit GK left; a normal keeper is always preferred.
+  const stillUsedIds = new Set(filled.map((s) => s.playerId).filter((id): id is string => id !== null));
+  const hasFitGKRemaining = squad.some((p) => p.position === 'GK' && !p.injured && !stillUsedIds.has(p.id));
+  if (!hasFitGKRemaining) {
+    const emergencyCandidates = squad
+      .filter((p) => !p.injured && !stillUsedIds.has(p.id))
+      .sort((a, b) => b.attributes.defending + b.attributes.physical - (a.attributes.defending + a.attributes.physical));
+    return filled.map((slot) => {
+      if (slot.position !== 'GK' || slot.playerId !== null) return slot;
+      const emergencyPlayer = emergencyCandidates.shift();
+      return emergencyPlayer ? { ...slot, playerId: emergencyPlayer.id } : slot;
+    });
+  }
+
+  return filled;
 }
 
 interface TeamSelectionScreenProps {
@@ -207,7 +226,15 @@ export function TeamSelectionScreen({
       if (targetIndex === -1) return prev;
       const targetSlot = prev[targetIndex];
       const isGKMismatch = (player.position === 'GK') !== (targetSlot.position === 'GK');
-      if (isGKMismatch) return prev; // reject: keepers and outfielders don't swap
+      if (isGKMismatch) {
+        // Normally keepers and outfielders don't swap — but if every
+        // recognized keeper is injured, letting an outfield player go in
+        // goal (a real, if rare, football scenario) beats leaving the slot
+        // permanently unfillable.
+        const puttingOutfielderInGoal = targetSlot.position === 'GK' && player.position !== 'GK';
+        const hasFitGKElsewhere = squad.some((p) => p.position === 'GK' && !p.injured && p.id !== playerId);
+        if (!puttingOutfielderInGoal || hasFitGKElsewhere) return prev;
+      }
 
       const next = prev.map((s) => ({ ...s }));
       const sourceIndex = next.findIndex((s) => s.playerId === playerId);

@@ -688,3 +688,37 @@ live: an unused player shows no bad-tone morale through 8 played matches now
   `useEffect` on `screen`) — Team Selection in particular stays mounted
   (just hidden) between visits, so without this a manager could land back
   on it still scrolled partway down from an earlier visit.
+
+## Fixed: getting stuck below 11 players after injuries
+
+User report: sometimes after a run of injuries they couldn't field 11
+players and were stuck. Root cause was two-fold, fixed both ways:
+
+- **Several clubs were genuinely too thin for an injury mechanic to exist
+  safely.** Blackburn, Hull, Middlesbrough, and West Brom (plus others)
+  originally had as few as 11 total players and, in four clubs' case, only
+  *one* recognized goalkeeper — any single injury to that keeper left the
+  GK slot with nobody real to fill it. Bulked up all 20 clubs with real
+  2008/09 squad players (see `data/realSquads2008_09.ts`'s updated header
+  for the confidence caveat — depth signings are lower-confidence than
+  first-teamers, flagged the same way the rest of this data always has
+  been). Every club is now at least 13 players; all but three now have 2-3
+  recognized keepers.
+- **The actual hard blocker, fixed properly**: even with enough total fit
+  players, both "Coach's Help" (`fillEmptySlotsWithCoachPick`) and manual
+  drag/tap placement (`dropOnSlot`) in `TeamSelectionScreen.tsx` strictly
+  required an actual goalkeeper for the GK slot — if a club's only
+  keeper(s) were injured, that slot was unfillable *regardless of total
+  squad depth*, since fuller squads don't help if there's still zero
+  keepers. Added a deliberate, narrow "emergency keeper" fallback: only
+  when **every** recognized keeper at a club is injured, the game (and the
+  manager, manually) can put the best available outfield player in goal —
+  a real, if rare, football scenario, not a free-for-all position swap. A
+  real keeper is always preferred when one's fit. Blackburn, Hull, and
+  Middlesbrough are still only one keeper deep (couldn't find a real
+  backup name I was confident enough to add rather than guess) — this
+  fallback is exactly the safety net for those three. Verified live: the
+  normal fill path (Hull, 11/11 via Coach's Help) still works correctly;
+  the emergency-fallback branch itself was verified by code review and
+  typecheck rather than forcing the ~3%-per-match injury roll to land on
+  that exact single keeper within a reasonable test session.
