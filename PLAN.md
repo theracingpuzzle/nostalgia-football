@@ -653,3 +653,13 @@ bolds and reddens a "sent off" line the same way it already bolds goals.
 Does **not** reduce the sent-off player's team to 10 men for the rest of
 the match — purely a tracked stat, not a simulated numbers-disadvantage
 effect (same as yellow cards never did either).
+
+## Morale "unsettled" threshold toned down
+
+User feedback: bench players were showing as unhappy with their game time
+after as few as 3 matches — too trigger-happy, flagging half the squad by
+matchday 3. `computePlayerMorale` (`engine/ratings.ts`) now requires a real
+stretch of being overlooked before judging someone unsettled: at least 6
+games played (was 3) and under 20% of appearances (was under 34%). Verified
+live: an unused player shows no bad-tone morale through 8 played matches now
+(previously would have flagged by match 3).

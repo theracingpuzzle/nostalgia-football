@@ -147,7 +147,10 @@ export function computePlayerMorale(stat: MonthlyPlayerStat | undefined, teamGam
   // Rating formula's baseline is 6.0 (see computeMatchRating), so thresholds
   // sit meaningfully above/below that rather than hugging it — otherwise
   // ordinary average performances would constantly misfire as good or bad.
-  if (teamGamesPlayed >= 3 && appearanceRate < 0.34) return { label: 'Unsettled — wants game time', tone: 'bad' };
+  // "Unsettled" needs a proper stretch of being overlooked, not just missing
+  // the odd early game — originally fired after 3 games with under a third
+  // of the appearances, which flagged half the bench by matchday 3.
+  if (teamGamesPlayed >= 6 && appearanceRate < 0.2) return { label: 'Unsettled — wants game time', tone: 'bad' };
   if (appearanceRate >= 0.5 && rating >= 6.8) return { label: 'Buzzing', tone: 'good' };
   if (appearanceRate >= 0.5 && rating > 0 && rating < 5.3) return { label: 'Low confidence', tone: 'bad' };
   if (appearanceRate >= 0.5) return { label: 'Settled', tone: 'good' };

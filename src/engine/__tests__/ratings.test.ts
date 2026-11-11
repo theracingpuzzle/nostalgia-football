@@ -143,8 +143,14 @@ describe('computePlayerMorale', () => {
     expect(computePlayerMorale(undefined, 0).tone).toBe('neutral');
   });
 
-  it('flags a rarely-used player as unsettled', () => {
+  it('flags a rarely-used player as unsettled once a real stretch of games has passed', () => {
     expect(computePlayerMorale(stat(1, 6.5), 10).label).toMatch(/unsettled/i);
+  });
+
+  it('does not flag a benched player as unsettled after just a game or two', () => {
+    expect(computePlayerMorale(undefined, 1).tone).not.toBe('bad');
+    expect(computePlayerMorale(undefined, 2).tone).not.toBe('bad');
+    expect(computePlayerMorale(stat(1, 6.5), 3).tone).not.toBe('bad');
   });
 
   it('is buzzing for a regular starter playing well', () => {
