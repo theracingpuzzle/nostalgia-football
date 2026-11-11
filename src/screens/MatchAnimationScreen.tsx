@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../components/ui/Button';
+import { CardIcon } from '../components/ui/CardIcon';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { GoalFrame } from '../components/ui/GoalFrame';
 import { KitIcon } from '../components/ui/KitIcon';
@@ -55,11 +56,6 @@ interface LiveCard {
   playerName: string;
   minute: number;
   cardType: 'yellow' | 'red';
-}
-
-/** A small rectangle in the card's color — not an emoji, so it renders the same everywhere. */
-function CardIcon({ type }: { type: 'yellow' | 'red' }) {
-  return <span aria-hidden className={`inline-block h-2.5 w-2 shrink-0 rounded-[1px] ${type === 'red' ? 'bg-red-600' : 'bg-yellow-400'}`} />;
 }
 
 function randomJitter(current: number, min: number, max: number, maxDelta: number): number {

@@ -989,3 +989,25 @@ remaining minutes would have been a fake feature, so:
   injury pass once the real final XI (starters + subs) is known. A reload
   mid-match (e.g. sitting at half time) isn't persisted — deliberately not
   worth the complexity; it just means replaying that one fixture fresh.
+
+## Cards on the Full Time scoreboard, and a proper match report
+
+Two refinements to `MatchResultScreen.tsx`, both user-requested:
+
+- **Cards alongside the goalscorers.** The scoreboard already listed each
+  side's scorers under the score; yellow/red cards now get the same
+  treatment in their own row underneath, each with the same small colored
+  `CardIcon` used on the live match screen (extracted to a shared
+  `components/ui/CardIcon.tsx` so both screens render cards identically).
+  Built from `homeBookings`/`homeRedCards` (and the away equivalents),
+  flattened and sorted by minute.
+- **Match Events now reads like an actual match report.** Added synthetic
+  "Kick Off", "Half Time — {score}", and "Full Time — {score}" entries,
+  merged into the event list by minute (`buildDisplayEvents`) — these
+  aren't stored on `MatchResult` itself, purely a presentational addition.
+  Half Time's score is computed from goal events up to minute 45, which
+  is now a real match phase the engine actually pauses at (see the half
+  time/substitutions entry above), not just an arbitrary cutoff. Every
+  card event in the list also gets its `CardIcon` plus colored text —
+  previously only red cards were styled differently from a goal; yellow
+  cards now get their own color too.
