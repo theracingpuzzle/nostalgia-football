@@ -861,3 +861,17 @@ own club against the club the incoming player is coming from. Needed
 (previously these only carried club *names* in the headline text, not ids),
 and a new `managedClubId` prop on `TransferWindowScreen`. Purely visual —
 doesn't change which deals/rumours/offers get generated.
+
+## Deadline day gets busier toward the end
+
+User feedback: real deadline days are quiet in the morning and go mad in
+the final couple of hours — the feed previously spread news/offers evenly
+across the window (roughly one per hour). Replaced the uniform hour
+assignment with `pickBiasedHour` in `CareerScreen.tsx`: each item's hour
+is still rolled independently, but using the max of three uniform rolls,
+which skews the result toward `DEADLINE_DAY_END_HOUR` (several items can
+now land in the same hour, and early hours are often empty) rather than
+guaranteeing one tidy item per hour. Verified live: a typical window now
+has most of its news/offers landing from 18:00 onward, with the last hour
+or two visibly the busiest. No change to how many deals/rumours/offers are
+generated, just when they land.

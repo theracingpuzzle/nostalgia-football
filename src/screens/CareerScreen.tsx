@@ -154,11 +154,27 @@ function buildCountdownEntries(): TransferTimelineEntry[] {
 }
 
 /**
+ * Picks an hour within the deadline-day window, skewed toward the end —
+ * real deadline days are quiet in the morning and go mad in the last
+ * couple of hours. Taking the max of three uniform rolls biases the result
+ * toward 1 (so toward DEADLINE_DAY_END_HOUR) without ruling out an early
+ * hour entirely — a classic skew trick, not anything statistically
+ * rigorous about real transfer deadlines.
+ */
+function pickBiasedHour(): number {
+  const span = DEADLINE_DAY_END_HOUR - DEADLINE_DAY_START_HOUR + 1;
+  const skewed = Math.max(Math.random(), Math.random(), Math.random());
+  return DEADLINE_DAY_START_HOUR + Math.min(span - 1, Math.floor(skewed * span));
+}
+
+/**
  * Spreads this window's news items and your own offers across the fixed
- * "deadline day" hours (see TransferWindowScreen), in random order, each
- * getting its own hour — so the live sequence reveals a mix of both rather
- * than all the news first and all your offers after. Fixed "hours left"
- * countdown entries are layered on top at the same checkpoints every time.
+ * "deadline day" hours (see TransferWindowScreen) — each item gets its own
+ * independently-rolled, end-biased hour (see pickBiasedHour), so several
+ * items can land in the same hour and the feed visibly thickens up as the
+ * deadline approaches, rather than one tidy item per hour spread evenly
+ * across the whole day. Fixed "hours left" countdown entries are layered
+ * on top at the same checkpoints every time.
  */
 function scheduleTransferTimeline(
   news: { text: string; confirmed: boolean; clubIds: [string, string] }[],
@@ -171,13 +187,8 @@ function scheduleTransferTimeline(
     ...news.map((n, i): TimelineItem => ({ kind: 'news', id: `news-${i}-${n.text.length}`, text: n.text, confirmed: n.confirmed, clubIds: n.clubIds })),
     ...offers.map((offer): TimelineItem => ({ kind: 'offer', id: `offer-${offer.id}`, offerId: offer.id })),
   ];
-  const shuffledItems = [...items].sort(() => Math.random() - 0.5);
 
-  const availableHours: number[] = [];
-  for (let h = DEADLINE_DAY_START_HOUR; h <= DEADLINE_DAY_END_HOUR; h++) availableHours.push(h);
-  const chosenHours = availableHours.sort(() => Math.random() - 0.5).slice(0, shuffledItems.length).sort((a, b) => a - b);
-
-  const scheduled: TransferTimelineEntry[] = shuffledItems.map((item, i) => ({ ...item, hour: chosenHours[i] }));
+  const scheduled: TransferTimelineEntry[] = items.map((item) => ({ ...item, hour: pickBiasedHour() }));
   return [...scheduled, ...buildCountdownEntries()].sort((a, b) => a.hour - b.hour);
 }
 
