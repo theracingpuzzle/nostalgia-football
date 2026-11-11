@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button';
+import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
+import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
 import type { Player } from '../engine/types';
 
 export interface TransferOffer {
@@ -8,14 +10,21 @@ export interface TransferOffer {
   outPlayer: Player;
   inPlayer: Player;
   inClubName: string;
+  inClubId: string;
   flavorText: string;
   status: 'pending' | 'accepted' | 'declined';
 }
 
 export type TransferTimelineEntry =
-  | { hour: number; kind: 'news'; id: string; text: string; confirmed: boolean }
+  | { hour: number; kind: 'news'; id: string; text: string; confirmed: boolean; clubIds: [string, string] }
   | { hour: number; kind: 'offer'; id: string; offerId: string }
   | { hour: number; kind: 'countdown'; id: string; hoursLeft: number };
+
+function MiniCrest({ clubId }: { clubId: string }) {
+  const club = PREMIER_LEAGUE_2008_09.find((c) => c.id === clubId);
+  if (!club) return null;
+  return <ClubCrest primaryColor={club.primaryColor} secondaryColor={club.secondaryColor} label={club.shortName} crestPath={club.crestPath} size={18} />;
+}
 
 /** A fixed "deadline day" window, same bounds every time — CareerScreen schedules news/offers into these hours. */
 export const DEADLINE_DAY_START_HOUR = 9;
@@ -32,6 +41,7 @@ const HOUR_TICK_MS = 2500; // 14 hourly ticks * 2.5s ≈ 35s total
  */
 export function TransferWindowScreen({
   title,
+  managedClubId,
   offers,
   timeline,
   onAccept,
@@ -39,6 +49,7 @@ export function TransferWindowScreen({
   onDone,
 }: {
   title: string;
+  managedClubId: string;
   offers: TransferOffer[];
   timeline: TransferTimelineEntry[];
   onAccept: (offerId: string) => void;
@@ -108,17 +119,22 @@ export function TransferWindowScreen({
           if (entry.kind === 'news') {
             return (
               <Panel key={entry.id}>
-                <p className="text-sm text-ink/70">
-                  <span className="mr-1.5 text-xs font-bold text-ink/50">{String(entry.hour).padStart(2, '0')}:00</span>
+                <div className="mb-1 flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-ink/50">{String(entry.hour).padStart(2, '0')}:00</span>
                   <span
-                    className={`mr-1.5 rounded-sm px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                    className={`rounded-sm px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${
                       entry.confirmed ? 'bg-green-700 text-white' : 'bg-amber-400 text-ink'
                     }`}
                   >
                     {entry.confirmed ? 'Done deal' : 'Rumour'}
                   </span>
-                  <span className="italic">{entry.text}</span>
-                </p>
+                  <span className="ml-auto flex items-center gap-1">
+                    <MiniCrest clubId={entry.clubIds[0]} />
+                    <span className="text-xs font-bold text-ink/40">↔</span>
+                    <MiniCrest clubId={entry.clubIds[1]} />
+                  </span>
+                </div>
+                <p className="text-sm italic text-ink/70">{entry.text}</p>
               </Panel>
             );
           }
@@ -127,7 +143,14 @@ export function TransferWindowScreen({
           if (!offer) return null;
           return (
             <Panel key={entry.id}>
-              <p className="mb-1 text-xs font-bold text-ink/50">{String(entry.hour).padStart(2, '0')}:00</p>
+              <div className="mb-1 flex items-center gap-1.5">
+                <span className="text-xs font-bold text-ink/50">{String(entry.hour).padStart(2, '0')}:00</span>
+                <span className="ml-auto flex items-center gap-1">
+                  <MiniCrest clubId={managedClubId} />
+                  <span className="text-xs font-bold text-ink/40">↔</span>
+                  <MiniCrest clubId={offer.inClubId} />
+                </span>
+              </div>
               <p className="mb-2 text-sm text-ink">{offer.flavorText}</p>
               <div className="mb-2 flex flex-col gap-1 text-xs text-ink/70 sm:flex-row sm:justify-between">
                 <span>

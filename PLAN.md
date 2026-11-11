@@ -849,3 +849,15 @@ All of this is still the same "just for fun" simulation it always was —
 no fees, no transfer values, no real market — now just presented with
 clearer signal (confirmed vs rumour) and better pacing (newest-first,
 countdown) per direct user feedback.
+
+## Club crests in the transfer window
+
+Added small club crests (`ClubCrest`, same component used elsewhere)
+alongside every entry in the deadline-day feed: each news item now shows
+both clubs involved (linked by a "↔"), and each offer panel shows your
+own club against the club the incoming player is coming from. Needed
+`clubIds`/`inClubId` plumbed through from `simulateLeagueTransferActivity`,
+`simulateLeagueRumours`, and `generateTransferOffers` in `CareerScreen.tsx`
+(previously these only carried club *names* in the headline text, not ids),
+and a new `managedClubId` prop on `TransferWindowScreen`. Purely visual —
+doesn't change which deals/rumours/offers get generated.
