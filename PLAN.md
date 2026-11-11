@@ -789,3 +789,15 @@ actually confirmed either way; this is a usability choice, not a
 faithfulness claim. Verified live: switching 4-4-2 → 4-3-3 → 5-3-2 kept
 the same back four and attackers throughout, only ever touching the one
 changed position each time.
+
+## Full Time screen tidy-up
+
+User feedback: the per-match "provisional statistical engine... see PLAN.md
+Stage 8" disclaimer, shown after *every single match*, was too naggy for
+ongoing play — removed the heading's "— Placeholder Simulation" suffix and
+the whole explanatory paragraph from `MatchResultScreen.tsx`. The
+underlying honesty — this isn't the original's real match engine, which is
+still unknown — isn't lost, it's just not repeated on-screen after every
+match; PLAN.md remains the source of truth for that caveat. Also put each
+scorer on their own line instead of joining them with " · " on one line
+(e.g. four different scorers no longer run together into one long string).

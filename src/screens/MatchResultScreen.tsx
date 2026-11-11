@@ -13,13 +13,7 @@ export function MatchResultScreen({ fixture, onContinue }: { fixture: Fixture; o
 
   return (
     <div className="mx-auto max-w-2xl p-4">
-      <h2 className="mb-3 text-center text-xl font-black uppercase tracking-wide text-white">
-        Full Time — Placeholder Simulation
-      </h2>
-      <p className="mb-3 text-center text-sm text-white/70">
-        This match result comes from a provisional statistical engine, not a recreation of the original's real match
-        mechanics (those are still unknown — see PLAN.md Stage 8).
-      </p>
+      <h2 className="mb-3 text-center text-xl font-black uppercase tracking-wide text-white">Full Time</h2>
 
       <Panel className="mb-3">
         <div className="flex items-center justify-center gap-4 py-2 text-2xl font-black">
@@ -36,8 +30,16 @@ export function MatchResultScreen({ fixture, onContinue }: { fixture: Fixture; o
           </span>
         </div>
         <div className="flex justify-center gap-10 pb-2 text-sm text-ink/70">
-          <div>{result.homeScorers.map((s) => `${s.playerName} ${s.minutes.join(', ')}'`).join(' · ') || '—'}</div>
-          <div>{result.awayScorers.map((s) => `${s.playerName} ${s.minutes.join(', ')}'`).join(' · ') || '—'}</div>
+          <div className="flex flex-col items-end gap-0.5">
+            {result.homeScorers.length > 0
+              ? result.homeScorers.map((s) => <div key={s.playerId}>{`${s.playerName} ${s.minutes.join(', ')}'`}</div>)
+              : <div>—</div>}
+          </div>
+          <div className="flex flex-col items-start gap-0.5">
+            {result.awayScorers.length > 0
+              ? result.awayScorers.map((s) => <div key={s.playerId}>{`${s.playerName} ${s.minutes.join(', ')}'`}</div>)
+              : <div>—</div>}
+          </div>
         </div>
       </Panel>
 
