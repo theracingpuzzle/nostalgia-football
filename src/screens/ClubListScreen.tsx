@@ -20,8 +20,8 @@ export function ClubListScreen({ onSelectClub }: { onSelectClub: (clubId: string
 
       <Panel>
         <p className="mb-2 text-sm text-ink/70">
-          Real club list. Squads are only built out for clubs marked <strong>Ready</strong> so far — the rest would be
-          placeholders (see PLAN.md).
+          Pick a club to manage for the 2008/09 Premier League season. Clubs marked <strong>Squad TBD</strong> aren't
+          ready to play yet.
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {CLUBS_ALPHABETICAL.map((club) => {
