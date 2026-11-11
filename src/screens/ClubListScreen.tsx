@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
 import { SQUADS_BY_CLUB_ID } from '../data/clubSquads';
@@ -14,9 +15,16 @@ import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
 const CLUBS_ALPHABETICAL = [...PREMIER_LEAGUE_2008_09].sort((a, b) => a.name.localeCompare(b.name));
 
 export function ClubListScreen({ onSelectClub }: { onSelectClub: (clubId: string) => void }) {
+  // Lands here straight after naming your manager, so make sure the page
+  // opens scrolled to the top rather than wherever the previous screen left off.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <div className="mx-auto max-w-3xl p-4 text-white">
-      <h2 className="mb-3 text-center text-2xl font-black uppercase tracking-wide">Premier League 2008/09</h2>
+      <h2 className="mb-1 text-center text-2xl font-black uppercase tracking-wide">Premier League 2008/09</h2>
+      <p className="mb-3 text-center text-sm text-white/70">Choose a club below to become their manager for the season.</p>
 
       <Panel>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
