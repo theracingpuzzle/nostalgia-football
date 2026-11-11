@@ -5,7 +5,7 @@ import { GoalFrame } from '../components/ui/GoalFrame';
 import { KitIcon } from '../components/ui/KitIcon';
 import { Panel } from '../components/ui/Panel';
 import type { ClubListing } from '../data/premierLeague0809';
-import type { Fixture, Position } from '../engine/types';
+import type { Fixture, Position, Scorer } from '../engine/types';
 
 const DURATION_MS = 9000;
 const TICK_MS = 300;
@@ -36,6 +36,13 @@ const ROLE_COUNTS: { role: Role; count: number }[] = [
   { role: 'MID', count: 4 },
   { role: 'FWD', count: 2 },
 ];
+
+/** Appends a goal to a live scorer list, building it up the same shape the final match result uses (so this screen and MatchResultScreen render scorers identically). */
+function appendScorer(prev: Scorer[], playerId: string, playerName: string, minute: number): Scorer[] {
+  const existing = prev.find((s) => s.playerId === playerId);
+  if (existing) return prev.map((s) => (s === existing ? { ...s, minutes: [...s.minutes, minute] } : s));
+  return [...prev, { playerId, playerName, minutes: [minute] }];
+}
 
 function randomJitter(current: number, min: number, max: number, maxDelta: number): number {
   const next = current + (Math.random() * 2 - 1) * maxDelta;
@@ -86,6 +93,8 @@ export function MatchAnimationScreen({
   const [ticker, setTicker] = useState<string>('Kick off');
   const [liveHomeGoals, setLiveHomeGoals] = useState(0);
   const [liveAwayGoals, setLiveAwayGoals] = useState(0);
+  const [liveHomeScorers, setLiveHomeScorers] = useState<Scorer[]>([]);
+  const [liveAwayScorers, setLiveAwayScorers] = useState<Scorer[]>([]);
   const firedRef = useRef(new Set<number>());
 
   useEffect(() => {
@@ -109,8 +118,21 @@ export function MatchAnimationScreen({
 
         if (event.type === 'goal') {
           setFlash(event.description);
-          if (event.side === 'home') setLiveHomeGoals((n) => n + 1);
-          else setLiveAwayGoals((n) => n + 1);
+          if (event.side === 'home') {
+            setLiveHomeGoals((n) => n + 1);
+            if (event.playerId && event.playerName) {
+              const playerId = event.playerId;
+              const playerName = event.playerName;
+              setLiveHomeScorers((prev) => appendScorer(prev, playerId, playerName, event.minute));
+            }
+          } else {
+            setLiveAwayGoals((n) => n + 1);
+            if (event.playerId && event.playerName) {
+              const playerId = event.playerId;
+              const playerName = event.playerName;
+              setLiveAwayScorers((prev) => appendScorer(prev, playerId, playerName, event.minute));
+            }
+          }
           // Home attacks right (away's net); away attacks left (home's net).
           setBall({ x: event.side === 'home' ? 97 : 3, y: 50 + (Math.random() * 16 - 8) });
           setTimeout(() => setFlash(null), 1500);
@@ -153,6 +175,10 @@ export function MatchAnimationScreen({
             <span className="truncate">{awayClub.shortName}</span>
             <ClubCrest primaryColor={awayClub.primaryColor} secondaryColor={awayClub.secondaryColor} label={awayClub.shortName} crestPath={awayClub.crestPath} size={28} />
           </div>
+        </div>
+        <div className="flex justify-center gap-10 px-1 pb-1 text-xs text-ink/70">
+          <div>{liveHomeScorers.map((s) => `${s.playerName} ${s.minutes.join(', ')}'`).join(' · ') || '—'}</div>
+          <div>{liveAwayScorers.map((s) => `${s.playerName} ${s.minutes.join(', ')}'`).join(' · ') || '—'}</div>
         </div>
         <div className="mx-1 mb-1 h-1.5 overflow-hidden rounded-full bg-ink/30">
           <div className="h-full bg-white/80 transition-all duration-300 ease-linear" style={{ width: `${(minute / 90) * 100}%` }} />
