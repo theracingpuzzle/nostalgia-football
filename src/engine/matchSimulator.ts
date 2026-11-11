@@ -83,7 +83,10 @@ export function simulateMatch({ fixtureId, home, away, seed, applyHomeAdvantage 
       playerName: scorer.name,
       assistPlayerId: assister?.id,
       assistPlayerName: assister?.name,
-      description: assister ? `GOAL! ${scorer.name} (${clubShortName}), assisted by ${assister.name}` : `GOAL! ${scorer.name} (${clubShortName})`,
+      // Deliberately just the goal itself — the assist (when there is one)
+      // is a separate field so the UI can lay it out on its own line rather
+      // than cramming "assisted by X" onto the end of one long line.
+      description: `GOAL! ${scorer.name} (${clubShortName})`,
     });
 
     const goalTallies = side === 'home' ? homeGoalMinutes : awayGoalMinutes;

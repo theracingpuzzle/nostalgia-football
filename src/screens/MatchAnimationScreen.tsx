@@ -101,8 +101,10 @@ export function MatchAnimationScreen({
   // another's still-active pulse. Each pulse owns its own id and timer.
   const [goalPulses, setGoalPulses] = useState<{ id: number; side: 'home' | 'away'; y: number }[]>([]);
   const [minute, setMinute] = useState(0);
-  const [flash, setFlash] = useState<string | null>(null);
-  const [ticker, setTicker] = useState<string>('Kick off');
+  // Text plus an optional second line — kept separate so "assisted by X"
+  // never gets crammed onto the end of one long line with the goal itself.
+  const [flash, setFlash] = useState<{ text: string; assistName?: string } | null>(null);
+  const [ticker, setTicker] = useState<{ text: string; assistName?: string }>({ text: 'Kick off' });
   const [liveHomeGoals, setLiveHomeGoals] = useState(0);
   const [liveAwayGoals, setLiveAwayGoals] = useState(0);
   const [liveHomeScorers, setLiveHomeScorers] = useState<Scorer[]>([]);
@@ -131,10 +133,10 @@ export function MatchAnimationScreen({
       result.events.forEach((event, index) => {
         if (event.minute > currentMinute || firedRef.current.has(index)) return;
         firedRef.current.add(index);
-        setTicker(event.description);
+        setTicker({ text: event.description, assistName: event.assistPlayerName });
 
         if (event.type === 'goal') {
-          setFlash(event.description);
+          setFlash({ text: event.description, assistName: event.assistPlayerName });
           if (event.side === 'home') {
             setLiveHomeGoals((n) => n + 1);
             if (event.playerId && event.playerName) {
@@ -279,13 +281,19 @@ export function MatchAnimationScreen({
         ))}
 
         {flash && (
-          <div className="absolute inset-x-0 top-1/3 flex justify-center">
-            <span className="rounded-sm bg-ink/90 px-3 py-1.5 text-base font-black uppercase tracking-wide text-white">{flash}</span>
+          <div className="absolute inset-x-0 top-1/3 flex justify-center px-4">
+            <span className="flex flex-col items-center gap-0.5 rounded-sm bg-ink/90 px-3 py-1.5 text-center text-base font-black uppercase tracking-wide text-white">
+              <span>{flash.text}</span>
+              {flash.assistName && <span className="text-sm font-bold normal-case text-white/80">assisted by {flash.assistName}</span>}
+            </span>
           </div>
         )}
       </div>
 
-      <p className="mt-2 min-h-[24px] text-center text-base font-semibold text-white">{ticker}</p>
+      <div className="mt-2 min-h-[24px] text-center text-white">
+        <p className="text-base font-semibold">{ticker.text}</p>
+        {ticker.assistName && <p className="text-sm text-white/70">assisted by {ticker.assistName}</p>}
+      </div>
 
       <div className="mt-1 flex justify-center">
         <Button variant="secondary" onClick={onFinished}>
