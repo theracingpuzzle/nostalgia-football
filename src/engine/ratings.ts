@@ -129,7 +129,7 @@ const TOTM_FORMATION: { position: Position; count: number }[] = [
 ];
 
 /**
- * Picks a Team of the Month in a fixed 1-4-3-3 shape (the shape real
+ * Picks a Team of the Month in a fixed 4-3-3 shape plus the keeper (the shape real
  * end-of-month team graphics typically use), ranked by average rating with
  * goals scored weighted in on top — matching "realistic, based on goals
  * scored etc." Not pulled from any confirmed source for the original game;

@@ -22,7 +22,7 @@ function latestMonthWithData(fixtures: Fixture[]): number {
 /**
  * League-wide "Team of the Month" — a new addition, not a reconstruction of
  * anything from the original (which almost certainly never had this). Picks
- * a 1-4-3-3 shaped XI from whoever played that block of matchdays, ranked by
+ * a 4-3-3 shaped XI (plus the keeper) from whoever played that block of matchdays, ranked by
  * a lightweight post-match rating (see engine/ratings.ts) with goals scored
  * weighted in on top. Flagged here the same way the transfer window is —
  * a fun addition, not a faithfulness claim.
@@ -72,7 +72,7 @@ export function TeamOfTheMonthScreen({ fixtures, allSquads, managedClubId }: { f
         </Button>
       </div>
 
-      <Panel title="1-4-3-3">
+      <Panel title="4-3-3">
         {!hasAnyData ? (
           <p className="p-3 text-center text-sm text-ink/70">No matches played in this block of fixtures yet.</p>
         ) : (
