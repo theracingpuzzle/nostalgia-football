@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { simulateMatch } from '../matchSimulator';
+import { createMatchSimulation, simulateMatch } from '../matchSimulator';
 import type { Club, Formation, Player, PlayerAttributes, Position, TeamMatchInput } from '../types';
 
 const FORMATION_442: Formation = {
@@ -150,5 +150,86 @@ describe('simulateMatch', () => {
     }
     expect(foundARedCard).toBe(true);
     expect(totalReds).toBeLessThan(totalBookings);
+  });
+});
+
+describe('createMatchSimulation', () => {
+  it('running it to 90 in one call matches simulateMatch exactly for the same seed', () => {
+    const home = makeTeam('home');
+    const away = makeTeam('away');
+
+    const viaWrapper = simulateMatch({ fixtureId: 'f1', home, away, seed: 555 });
+
+    const sim = createMatchSimulation({ fixtureId: 'f1', home, away, seed: 555 });
+    sim.advanceTo(90);
+    const viaHandle = sim.getResult();
+
+    expect(viaHandle).toEqual(viaWrapper);
+  });
+
+  it('advancing in two halves with no substitution matches one 90-minute call exactly', () => {
+    const home = makeTeam('home');
+    const away = makeTeam('away');
+
+    const whole = simulateMatch({ fixtureId: 'f1', home, away, seed: 909 });
+
+    const sim = createMatchSimulation({ fixtureId: 'f1', home, away, seed: 909 });
+    sim.advanceTo(45);
+    sim.advanceTo(90);
+    const halves = sim.getResult();
+
+    expect(halves).toEqual(whole);
+  });
+
+  it('a substitute cannot be credited with events from before they came on', () => {
+    const home = makeTeam('home');
+    const away = makeTeam('away');
+    const sub = makePlayer('home-SUB-0', 'FWD');
+
+    const sim = createMatchSimulation({ fixtureId: 'f1', home, away, seed: 42 });
+    sim.advanceTo(45);
+    const firstHalfResult = sim.getResult();
+    const outgoing = home.selectedXI[9]; // a FWD
+    sim.substitute('home', outgoing.id, sub);
+    sim.advanceTo(90);
+    const finalResult = sim.getResult();
+
+    const subEventsBeforeComingOn = finalResult.events.filter((e) => e.playerId === sub.id && e.minute <= 45);
+    expect(subEventsBeforeComingOn).toHaveLength(0);
+    // Everything already decided in the first half is untouched by the substitution.
+    expect(finalResult.events.filter((e) => e.minute <= 45)).toEqual(firstHalfResult.events);
+  });
+
+  it('a substitute can be credited with events after coming on', () => {
+    const home = makeTeam('home', { shooting: 95, pace: 95, passing: 90 });
+    const away = makeTeam('away', { shooting: 20, pace: 20, passing: 20, defending: 15 });
+
+    let foundSubGoal = false;
+    for (let seed = 0; seed < 100 && !foundSubGoal; seed++) {
+      const sub = makePlayer('home-SUB-0', 'FWD', { shooting: 99 });
+      const sim = createMatchSimulation({ fixtureId: 'f1', home, away, seed });
+      sim.advanceTo(45);
+      sim.substitute('home', home.selectedXI[9].id, sub);
+      sim.advanceTo(90);
+      const result = sim.getResult();
+      if (result.events.some((e) => e.playerId === sub.id)) foundSubGoal = true;
+    }
+    expect(foundSubGoal).toBe(true);
+  });
+
+  it('homeXI/awayXI include both the starting XI and anyone subbed on', () => {
+    const home = makeTeam('home');
+    const away = makeTeam('away');
+    const sub = makePlayer('home-SUB-0', 'FWD');
+    const outgoing = home.selectedXI[9];
+
+    const sim = createMatchSimulation({ fixtureId: 'f1', home, away, seed: 7 });
+    sim.advanceTo(45);
+    sim.substitute('home', outgoing.id, sub);
+    sim.advanceTo(90);
+    const result = sim.getResult();
+
+    expect(result.homeXI).toContain(outgoing.id);
+    expect(result.homeXI).toContain(sub.id);
   });
 });

@@ -6,15 +6,37 @@ import { ManagerNameScreen } from './screens/ManagerNameScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { SQUADS_BY_CLUB_ID } from './data/clubSquads';
 import { PREMIER_LEAGUE_2008_09 } from './data/premierLeague0809';
+import { clearCareer, loadCareer, type CareerSaveData } from './utils/careerStorage';
 
 type Stage = 'title' | 'managerName' | 'clubSelect' | { kind: 'career'; clubId: string };
 
 function App() {
+  // Read once at startup — this app only ever writes this key from its own
+  // autosave, so there's no need to re-check it after the initial load.
+  const [savedCareer, setSavedCareer] = useState<CareerSaveData | null>(() => loadCareer());
   const [stage, setStage] = useState<Stage>('title');
   const [managerName, setManagerName] = useState('');
 
   if (stage === 'title') {
-    return <TitleScreen onNewCareer={() => setStage('managerName')} />;
+    const savedClub = savedCareer ? PREMIER_LEAGUE_2008_09.find((c) => c.id === savedCareer.clubId) : undefined;
+    return (
+      <TitleScreen
+        onNewCareer={() => {
+          clearCareer();
+          setSavedCareer(null);
+          setStage('managerName');
+        }}
+        continueLabel={savedClub ? `Continue as ${savedClub.shortName} — ${savedCareer?.managerName}` : undefined}
+        onContinueCareer={
+          savedCareer && savedClub
+            ? () => {
+                setManagerName(savedCareer.managerName);
+                setStage({ kind: 'career', clubId: savedCareer.clubId });
+              }
+            : undefined
+        }
+      />
+    );
   }
 
   if (stage === 'managerName') {
@@ -33,13 +55,37 @@ function App() {
       {stage === 'clubSelect' ? (
         <ClubListScreen onSelectClub={(clubId) => setStage({ kind: 'career', clubId })} />
       ) : (
-        <ClubRoute clubId={stage.clubId} managerName={managerName} onChangeClub={() => setStage('clubSelect')} />
+        <ClubRoute
+          clubId={stage.clubId}
+          managerName={managerName}
+          initialSave={savedCareer ?? undefined}
+          onChangeClub={() => {
+            // "Change Club" abandons this career — the save would otherwise
+            // be silently overwritten by whatever club is picked next, but
+            // clearing it now is more honest about what's happening. Also
+            // clears the in-memory copy, so re-picking the same club
+            // doesn't resurrect the career just abandoned.
+            clearCareer();
+            setSavedCareer(null);
+            setStage('clubSelect');
+          }}
+        />
       )}
     </div>
   );
 }
 
-function ClubRoute({ clubId, managerName, onChangeClub }: { clubId: string; managerName: string; onChangeClub: () => void }) {
+function ClubRoute({
+  clubId,
+  managerName,
+  initialSave,
+  onChangeClub,
+}: {
+  clubId: string;
+  managerName: string;
+  initialSave?: CareerSaveData;
+  onChangeClub: () => void;
+}) {
   const club = PREMIER_LEAGUE_2008_09.find((c) => c.id === clubId);
   const squad = SQUADS_BY_CLUB_ID[clubId];
 
@@ -59,7 +105,7 @@ function ClubRoute({ clubId, managerName, onChangeClub }: { clubId: string; mana
   }
 
   // key={club.id} forces a fresh CareerScreen (and its fixtures/table/XI state) whenever the club changes.
-  return <CareerScreen key={club.id} club={club} squad={squad} managerName={managerName} onChangeClub={onChangeClub} />;
+  return <CareerScreen key={club.id} club={club} squad={squad} managerName={managerName} onChangeClub={onChangeClub} initialSave={initialSave} />;
 }
 
 export default App;

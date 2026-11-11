@@ -5,7 +5,7 @@ import { DEFAULT_FORMATION_ID, FORMATIONS } from '../data/formations';
 import type { ClubListing } from '../data/premierLeague0809';
 import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
 import { applyInjuryUpdates, computeLeagueTable, computeMonthlyPlayerStats, createRandom, generateFixtures, pickBestXI, simulateMatch } from '../engine';
-import type { Fixture, Player } from '../engine/types';
+import type { Fixture, MatchResult, Player, TeamMatchInput } from '../engine/types';
 import { FixturesScreen } from './FixturesScreen';
 import { LeagueTableScreen } from './LeagueTableScreen';
 import { MatchAnimationScreen } from './MatchAnimationScreen';
@@ -21,6 +21,7 @@ import {
   type TransferOffer,
   type TransferTimelineEntry,
 } from './TransferWindowScreen';
+import { saveCareer, type CareerSaveData } from '../utils/careerStorage';
 
 const ALL_CLUB_IDS = PREMIER_LEAGUE_2008_09.map((c) => c.id);
 const AI_FORMATION = FORMATIONS.find((f) => f.id === DEFAULT_FORMATION_ID) ?? FORMATIONS[0];
@@ -275,6 +276,27 @@ function cloneSquads(source: Record<string, Player[]>): Record<string, Player[]>
 }
 
 /**
+ * Everything the live match screen needs to simulate the managed club's
+ * fixture itself (so half-time substitutions can affect the second half),
+ * plus what's needed to finish the job once it reports back: the other
+ * matchday fixtures are simulated and committed immediately in
+ * playNextFixture as before, but this one fixture's seed is just reserved
+ * there — the actual simulation happens live, and injuries for the WHOLE
+ * matchday wait until this result is known too.
+ */
+interface LiveMatchSetup {
+  fixtureId: string;
+  homeInput: TeamMatchInput;
+  awayInput: TeamMatchInput;
+  seed: number;
+  managedSide: 'home' | 'away';
+  managedBench: Player[];
+  matchday: number;
+  playedPlayerIdsByClub: Record<string, string[]>;
+  seedAfterOtherFixtures: number;
+}
+
+/**
  * Owns a single club's career session: team selection, the league's
  * fixture list, and the table. Match simulation here is the engine parked
  * in PLAN.md — a provisional statistical stand-in, not the original's real
@@ -286,13 +308,18 @@ export function CareerScreen({
   squad,
   managerName,
   onChangeClub,
+  initialSave,
 }: {
   club: ClubListing;
   squad: Player[];
   managerName: string;
   onChangeClub: () => void;
+  /** A previously-saved career for this same club, to resume from instead of starting fresh. Ignored (treated as absent) if it belongs to a different club. */
+  initialSave?: CareerSaveData;
 }) {
-  const [screen, setScreen] = useState<CareerScreenId>('team');
+  const resume = initialSave && initialSave.clubId === club.id ? initialSave : undefined;
+
+  const [screen, setScreen] = useState<CareerScreenId>(resume?.screen ?? 'team');
 
   // Switching tabs (or landing back on Team Selection after a match) should
   // open at the top of that screen, not wherever the page happened to be
@@ -303,16 +330,23 @@ export function CareerScreen({
     window.scrollTo(0, 0);
   }, [screen]);
 
-  const [formationId, setFormationId] = useState(DEFAULT_FORMATION_ID);
-  const [selectedXI, setSelectedXI] = useState<string[]>([]);
-  const [fixtures, setFixtures] = useState<Fixture[]>(() => generateFixtures(ALL_CLUB_IDS));
+  const [formationId, setFormationId] = useState(resume?.formationId ?? DEFAULT_FORMATION_ID);
+  const [selectedXI, setSelectedXI] = useState<string[]>(resume?.selectedXI ?? []);
+  const [fixtures, setFixtures] = useState<Fixture[]>(() => resume?.fixtures ?? generateFixtures(ALL_CLUB_IDS));
   // Randomized per career start (not a fixed constant) so replaying the same
   // fixture list doesn't always reproduce the identical result. The engine
   // itself stays a pure, deterministic function of its seed — same seed still
   // always gives the same match, which is what the unit tests check.
-  const [nextSeed, setNextSeed] = useState(() => Math.floor(Math.random() * 1_000_000) + 1);
-  const [lastPlayedFixtureId, setLastPlayedFixtureId] = useState<string | null>(null);
+  const [nextSeed, setNextSeed] = useState(() => resume?.nextSeed ?? Math.floor(Math.random() * 1_000_000) + 1);
+  const [lastPlayedFixtureId, setLastPlayedFixtureId] = useState<string | null>(resume?.lastPlayedFixtureId ?? null);
+  // Never resumes mid-animation (even if a save happened to land there) —
+  // the match result is already in `fixtures`, so this just shows the Full
+  // Time screen for it instead of replaying the animation from scratch.
   const [showingAnimation, setShowingAnimation] = useState(false);
+  // Not persisted (see above) — a reload mid-live-match just means
+  // replaying that one fixture fresh rather than resurrecting a half-played
+  // match, which isn't worth the complexity of serializing.
+  const [liveMatch, setLiveMatch] = useState<LiveMatchSetup | null>(null);
 
   // Per-career mutable squads (starts as a copy of the shared static data) so
   // transfer-window swaps only affect this playthrough, not the app-wide
@@ -320,9 +354,12 @@ export function CareerScreen({
   // simulateLeagueTransferActivity) — applied here so the very first
   // pre-season window already reflects it; the ref is just a same-render
   // side channel so the news initializer below can read what this one
-  // generated, without rerolling a different random outcome.
+  // generated, without rerolling a different random outcome. Skipped
+  // entirely when resuming a save — that squad state (and the news it
+  // produced) is already captured in the save itself.
   const initialTransferNewsRef = useRef<{ text: string; confirmed: boolean; clubIds: [string, string] }[]>([]);
   const [allSquads, setAllSquads] = useState<Record<string, Player[]>>(() => {
+    if (resume) return resume.allSquads;
     const { updatedSquads, news } = simulateLeagueTransferActivity(cloneSquads(SQUADS_BY_CLUB_ID), club.id, 5);
     const rumours = simulateLeagueRumours(updatedSquads, club.id, 4);
     initialTransferNewsRef.current = [
@@ -331,13 +368,54 @@ export function CareerScreen({
     ];
     return updatedSquads;
   });
-  const [transferWindow, setTransferWindow] = useState<'preseason' | 'january' | null>('preseason');
-  const [januaryWindowShown, setJanuaryWindowShown] = useState(false);
-  const [transferOffers, setTransferOffers] = useState<TransferOffer[]>(() => generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
-  const [transferTimeline, setTransferTimeline] = useState<TransferTimelineEntry[]>(() =>
-    scheduleTransferTimeline(initialTransferNewsRef.current, transferOffers),
+  const [transferWindow, setTransferWindow] = useState<'preseason' | 'january' | null>(resume ? resume.transferWindow : 'preseason');
+  const [januaryWindowShown, setJanuaryWindowShown] = useState(resume?.januaryWindowShown ?? false);
+  const [transferOffers, setTransferOffers] = useState<TransferOffer[]>(() => resume?.transferOffers ?? generateTransferOffers(club.id, allSquads, new Set(selectedXI)));
+  const [transferTimeline, setTransferTimeline] = useState<TransferTimelineEntry[]>(
+    () => resume?.transferTimeline ?? scheduleTransferTimeline(initialTransferNewsRef.current, transferOffers),
   );
-  const [seasonSummaryDismissed, setSeasonSummaryDismissed] = useState(false);
+  const [seasonSummaryDismissed, setSeasonSummaryDismissed] = useState(resume?.seasonSummaryDismissed ?? false);
+
+  // Autosave: one localStorage write whenever any persisted piece of state
+  // changes, so a refresh/close mid-career loses at most the last action
+  // rather than the whole season. Deliberately not debounced — writes here
+  // are small and infrequent enough (team changes, match results, transfer
+  // decisions) that there's no real cost to saving on every one of them,
+  // and debouncing risks losing the very last action if the tab closes
+  // right after it.
+  useEffect(() => {
+    saveCareer({
+      clubId: club.id,
+      managerName,
+      screen,
+      formationId,
+      selectedXI,
+      fixtures,
+      nextSeed,
+      lastPlayedFixtureId,
+      allSquads,
+      transferWindow,
+      januaryWindowShown,
+      transferOffers,
+      transferTimeline,
+      seasonSummaryDismissed,
+    });
+  }, [
+    club.id,
+    managerName,
+    screen,
+    formationId,
+    selectedXI,
+    fixtures,
+    nextSeed,
+    lastPlayedFixtureId,
+    allSquads,
+    transferWindow,
+    januaryWindowShown,
+    transferOffers,
+    transferTimeline,
+    seasonSummaryDismissed,
+  ]);
 
   const liveSquad = allSquads[club.id] ?? squad;
   const table = useMemo(() => computeLeagueTable(ALL_CLUB_IDS, fixtures), [fixtures]);
@@ -414,11 +492,11 @@ export function CareerScreen({
 
     const formation = getFormation(formationId);
     const managedXI = liveSquad.filter((p) => selectedXI.includes(p.id));
-    let managedFixtureId: string | null = null;
 
     let seed = nextSeed;
     const resultsByFixtureId = new Map<string, ReturnType<typeof simulateMatch>>();
     const playedPlayerIdsByClub: Record<string, string[]> = {};
+    let pendingLiveMatch: LiveMatchSetup | null = null;
 
     for (const fixture of fixturesThisMatchday) {
       const isManagedHome = fixture.homeClubId === club.id;
@@ -440,12 +518,33 @@ export function CareerScreen({
         ? { club: awayClubForEngine, formation, selectedXI: managedXI }
         : { club: awayClubForEngine, formation: AI_FORMATION, selectedXI: pickBestXI(awayClubForEngine, AI_FORMATION) };
 
+      if (isManagedHome || isManagedAway) {
+        // Deferred, not simulated here — the live match screen runs this
+        // one itself (createMatchSimulation), pausing at half time so a
+        // substitution can actually change who's on the pitch for the
+        // second half. Still reserves this fixture's seed slot in the same
+        // sequence as every other match, so the rest of the league's
+        // results don't shift depending on what you do in your own match.
+        pendingLiveMatch = {
+          fixtureId: fixture.id,
+          homeInput,
+          awayInput,
+          seed,
+          managedSide: isManagedHome ? 'home' : 'away',
+          managedBench: liveSquad.filter((p) => !selectedXI.includes(p.id) && !p.injured),
+          matchday,
+          playedPlayerIdsByClub: { ...playedPlayerIdsByClub },
+          seedAfterOtherFixtures: NaN, // filled in once every fixture's seed slot is reserved
+        };
+        seed += 1;
+        continue;
+      }
+
       const result = simulateMatch({ fixtureId: fixture.id, home: homeInput, away: awayInput, seed });
       seed += 1;
       resultsByFixtureId.set(fixture.id, result);
       playedPlayerIdsByClub[fixture.homeClubId] = result.homeXI;
       playedPlayerIdsByClub[fixture.awayClubId] = result.awayXI;
-      if (isManagedHome || isManagedAway) managedFixtureId = fixture.id;
     }
 
     setFixtures((prev) => prev.map((f) => {
@@ -453,12 +552,51 @@ export function CareerScreen({
       return result ? { ...f, played: true, result } : f;
     }));
 
-    // Injuries/recoveries for every club, not just the one you manage — uses
-    // the next seed in the same sequence as the matches themselves, so a
-    // career replays identically from its starting seed.
+    if (pendingLiveMatch) {
+      pendingLiveMatch.seedAfterOtherFixtures = seed;
+      setLiveMatch(pendingLiveMatch);
+      setLastPlayedFixtureId(pendingLiveMatch.fixtureId);
+      setShowingAnimation(true);
+      // nextSeed, injuries, and XI-fitness all finish once the live match
+      // reports its result back — see handleManagedMatchFinished.
+      return;
+    }
+
+    // No managed fixture this matchday (every club always has one in a
+    // full round-robin season, but fall back safely rather than assume it).
     const injuryRandom = createRandom(seed);
     seed += 1;
     const updatedAllSquads = applyInjuryUpdates(allSquads, matchday, playedPlayerIdsByClub, injuryRandom);
+    setAllSquads(updatedAllSquads);
+    const stillFitIds = new Set((updatedAllSquads[club.id] ?? []).filter((p) => !p.injured).map((p) => p.id));
+    setSelectedXI((prev) => prev.filter((id) => stillFitIds.has(id)));
+    setNextSeed(seed);
+  }
+
+  /** Called once the live match screen finishes the managed fixture (after any half-time substitutions) — commits its result and finally runs the injury pass for the whole matchday. */
+  function handleManagedMatchFinished(result: MatchResult) {
+    if (!liveMatch) return;
+    const fixture = fixtures.find((f) => f.id === liveMatch.fixtureId);
+    if (!fixture) {
+      setLiveMatch(null);
+      return;
+    }
+
+    setFixtures((prev) => prev.map((f) => (f.id === liveMatch.fixtureId ? { ...f, played: true, result } : f)));
+
+    const playedPlayerIdsByClub: Record<string, string[]> = {
+      ...liveMatch.playedPlayerIdsByClub,
+      [fixture.homeClubId]: result.homeXI,
+      [fixture.awayClubId]: result.awayXI,
+    };
+
+    // Injuries/recoveries for every club, not just the one you manage — uses
+    // the next seed in the same sequence as the matches themselves, so a
+    // career replays identically from its starting seed.
+    let seed = liveMatch.seedAfterOtherFixtures;
+    const injuryRandom = createRandom(seed);
+    seed += 1;
+    const updatedAllSquads = applyInjuryUpdates(allSquads, liveMatch.matchday, playedPlayerIdsByClub, injuryRandom);
     setAllSquads(updatedAllSquads);
     // A player newly injured mid-season can't stay in your selected XI —
     // same rule as picking the team in the first place.
@@ -466,8 +604,7 @@ export function CareerScreen({
     setSelectedXI((prev) => prev.filter((id) => stillFitIds.has(id)));
 
     setNextSeed(seed);
-    setLastPlayedFixtureId(managedFixtureId);
-    setShowingAnimation(true);
+    setLiveMatch(null);
   }
 
   /** Fresh fixture list for the same 20 clubs; squads (and any transfers made) carry over. No promotion/relegation between divisions — see SeasonSummaryScreen. */
@@ -501,9 +638,24 @@ export function CareerScreen({
   } else if (lastFixture) {
     const homeClub = PREMIER_LEAGUE_2008_09.find((c) => c.id === lastFixture.homeClubId);
     const awayClub = PREMIER_LEAGUE_2008_09.find((c) => c.id === lastFixture.awayClubId);
-    if (showingAnimation && homeClub && awayClub) {
-      overlay = <MatchAnimationScreen fixture={lastFixture} homeClub={homeClub} awayClub={awayClub} onFinished={() => setShowingAnimation(false)} />;
-    } else {
+    if (showingAnimation && liveMatch && liveMatch.fixtureId === lastFixture.id && homeClub && awayClub) {
+      overlay = (
+        <MatchAnimationScreen
+          fixtureId={liveMatch.fixtureId}
+          homeClub={homeClub}
+          awayClub={awayClub}
+          homeInput={liveMatch.homeInput}
+          awayInput={liveMatch.awayInput}
+          seed={liveMatch.seed}
+          managedSide={liveMatch.managedSide}
+          managedBench={liveMatch.managedBench}
+          onFinished={(result) => {
+            handleManagedMatchFinished(result);
+            setShowingAnimation(false);
+          }}
+        />
+      );
+    } else if (!showingAnimation) {
       overlay = (
         <MatchResultScreen
           fixture={lastFixture}

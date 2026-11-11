@@ -915,3 +915,77 @@ Two more user-requested refinements:
   it renders consistently) next to the player's name and minute, appended
   to the same home/away columns as the goal list as `yellow-card`/
   `red-card` events fire during the live match.
+
+## localStorage save/resume
+
+The app previously had zero persistence — closing or refreshing the tab
+lost an entire career (squad, fixtures played, injuries, transfers, the
+lot). Added a single-slot localStorage save:
+
+- `utils/careerStorage.ts` — `saveCareer`/`loadCareer`/`clearCareer`
+  against one fixed key (`fsm-career-v1`), with `loadCareer` rejecting
+  anything that isn't valid JSON or is missing the required fields, so a
+  corrupted or foreign value in that key can't crash the app on load.
+  Covered by its own unit tests (round-trip, overwrite, corrupted JSON).
+- `CareerScreen.tsx` now accepts an optional `initialSave` prop and seeds
+  every persisted piece of state (formation, XI, fixtures, squads,
+  transfer window state, etc.) from it when present and it matches the
+  current club; a single `useEffect` autosaves the full snapshot to
+  localStorage whenever any of that state changes. Deliberately one save
+  slot, not one per club — matches the app's existing single-playthrough
+  flow (there's no multi-career-at-once UI).
+- `App.tsx` loads the save once at startup and, if present, `TitleScreen`
+  shows a "Continue as {Club} — {Manager}" button alongside "New Career".
+  Starting a new career or using "Change Club" explicitly clears the save
+  (both the localStorage copy and the in-memory one) rather than letting
+  it get silently overwritten — picking the same club back wouldn't
+  otherwise resurrect the career you just abandoned.
+- Never resumes mid-match-animation — a save always restores to the Full
+  Time screen for the last-played fixture instead (the result is already
+  in `fixtures`, so nothing is lost, just the animation itself replaying).
+
+This is browser-local only — no account, no sync between devices/browsers,
+clearing site data wipes it. Good enough for "don't lose your season if
+you refresh the tab," not a backend.
+
+## Half time and substitutions
+
+User-requested: a real break at half time, and the ability to make
+substitutions during the match instead of only before kickoff. This
+needed a genuine engine change, not just a UI one — up to now the whole
+90 minutes were simulated instantly, up front, before the live screen
+even started (the "live" match was purely a cosmetic replay of an
+already-decided result). A substitution that didn't actually change the
+remaining minutes would have been a fake feature, so:
+
+- `matchSimulator.ts`: `simulateMatch` is now a thin wrapper around a new
+  `createMatchSimulation`, which returns a handle with `advanceTo(minute)`,
+  `substitute(side, outPlayerId, inPlayer)`, and `getResult()`. The engine
+  can be paused mid-match and resumed; a substitution swaps a player in
+  the live XI in place, so scorer/assist/card eligibility for *future*
+  minutes picks it up while past events stand untouched. Verified this
+  produces byte-identical results to the old one-shot `simulateMatch` for
+  a full 90 minutes with no substitution (existing tests + new ones
+  covering split-advance, substitution timing, and `homeXI`/`awayXI` now
+  including everyone who featured, not just the starting XI).
+- `MatchAnimationScreen.tsx` now runs the managed club's match live
+  instead of replaying a pre-computed one: first half ticks 1-45, pauses
+  on a Half Time panel showing the current on-pitch XI with a same-position
+  bench dropdown per player, up to **3 substitutions** (the real limit for
+  this era — the five-sub rule didn't exist until 2020), a sent-off player
+  can't be subbed (shown struck through, "Sent off"), then "Continue to
+  Second Half" runs 46-90. "Skip to Full Time" works from either half or
+  from the half-time screen itself, finishing with whatever subs (if any)
+  were already made.
+- Only the **managed club** gets substitutions — the AI opponent keeps its
+  starting XI the whole match. Not confirmed either way from the original
+  (which almost certainly let you sub anytime, not just at half time);
+  flagged here as a deliberate simplification, not a faithfulness claim.
+- `CareerScreen.tsx`'s `playNextFixture` still simulates every *other*
+  matchday fixture eagerly and immediately (that's unaffected — only your
+  own match is now interactive), but defers the managed fixture itself
+  (just reserving its seed, same sequence as before) to the live screen;
+  `handleManagedMatchFinished` commits its result and runs the matchday's
+  injury pass once the real final XI (starters + subs) is known. A reload
+  mid-match (e.g. sitting at half time) isn't persisted — deliberately not
+  worth the complexity; it just means replaying that one fixture fresh.
