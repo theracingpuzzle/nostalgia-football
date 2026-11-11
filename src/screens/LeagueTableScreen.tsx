@@ -1,10 +1,26 @@
+import { useState } from 'react';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
 import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
-import type { LeagueTableRow } from '../engine/types';
+import type { Fixture, LeagueTableRow, Player } from '../engine/types';
 import { getLeagueZone, ZONE_STYLES } from '../utils/leagueZones';
+import { ClubOverviewScreen } from './ClubOverviewScreen';
 
-export function LeagueTableScreen({ table, managedClubId }: { table: LeagueTableRow[]; managedClubId: string }) {
+export function LeagueTableScreen({
+  table,
+  managedClubId,
+  fixtures,
+  allSquads,
+}: {
+  table: LeagueTableRow[];
+  managedClubId: string;
+  fixtures: Fixture[];
+  allSquads: Record<string, Player[]>;
+}) {
+  const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
+  const selectedClub = selectedClubId ? PREMIER_LEAGUE_2008_09.find((c) => c.id === selectedClubId) : null;
+  const selectedPosition = selectedClubId ? table.findIndex((r) => r.clubId === selectedClubId) + 1 : 0;
+
   return (
     <div className="mx-auto max-w-3xl p-4">
       <h2 className="mb-3 text-xl font-black uppercase tracking-wide text-white">League Table</h2>
@@ -35,7 +51,8 @@ export function LeagueTableScreen({ table, managedClubId }: { table: LeagueTable
                 return (
                   <tr
                     key={row.clubId}
-                    className={`border-b border-ink/10 ${stripeClass} ${i % 2 === 0 ? 'bg-white/60' : 'bg-white/30'} ${isManaged ? 'bg-pitch-light/40 font-bold' : ''}`}
+                    onClick={() => setSelectedClubId(row.clubId)}
+                    className={`cursor-pointer border-b border-ink/10 ${stripeClass} ${i % 2 === 0 ? 'bg-white/60' : 'bg-white/30'} ${isManaged ? 'bg-pitch-light/40 font-bold' : ''} hover:brightness-95`}
                   >
                     <td className="px-2 py-1.5 text-right">{position}</td>
                     <td className="px-2 py-1.5">
@@ -69,6 +86,21 @@ export function LeagueTableScreen({ table, managedClubId }: { table: LeagueTable
           ))}
         </div>
       </Panel>
+
+      {selectedClub && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-pitch">
+          <ClubOverviewScreen
+            club={selectedClub}
+            leagueRow={table.find((r) => r.clubId === selectedClub.id)}
+            leaguePosition={selectedPosition}
+            totalClubs={table.length}
+            squad={allSquads[selectedClub.id] ?? []}
+            fixtures={fixtures}
+            allSquads={allSquads}
+            onClose={() => setSelectedClubId(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }

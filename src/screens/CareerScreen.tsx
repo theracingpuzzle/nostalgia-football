@@ -321,7 +321,7 @@ export function CareerScreen({
         />
       )}
 
-      {screen === 'table' && <LeagueTableScreen table={table} managedClubId={club.id} />}
+      {screen === 'table' && <LeagueTableScreen table={table} managedClubId={club.id} fixtures={fixtures} allSquads={allSquads} />}
 
       {screen === 'scorers' && <ScorersScreen scorers={topScorers} managedClubId={club.id} />}
 
