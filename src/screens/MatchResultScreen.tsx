@@ -3,6 +3,7 @@ import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
 import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
 import type { Fixture } from '../engine/types';
+import { computeAttendance } from '../utils/attendance';
 
 export function MatchResultScreen({ fixture, onContinue }: { fixture: Fixture; onContinue: () => void }) {
   const result = fixture.result;
@@ -13,7 +14,12 @@ export function MatchResultScreen({ fixture, onContinue }: { fixture: Fixture; o
 
   return (
     <div className="mx-auto max-w-2xl p-4">
-      <h2 className="mb-3 text-center text-xl font-black uppercase tracking-wide text-white">Full Time</h2>
+      <h2 className="mb-1 text-center text-xl font-black uppercase tracking-wide text-white">Full Time</h2>
+      {homeClub && (
+        <p className="mb-3 text-center text-xs text-white/60">
+          {homeClub.stadiumName} · Attendance {computeAttendance(fixture.id, homeClub.stadiumCapacity).toLocaleString()}
+        </p>
+      )}
 
       <Panel className="mb-3">
         <div className="flex items-center justify-center gap-4 py-2 text-2xl font-black">

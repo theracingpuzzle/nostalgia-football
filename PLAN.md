@@ -801,3 +801,24 @@ still unknown — isn't lost, it's just not repeated on-screen after every
 match; PLAN.md remains the source of truth for that caveat. Also put each
 scorer on their own line instead of joining them with " · " on one line
 (e.g. four different scorers no longer run together into one long string).
+
+## Stadium name and simulated attendance
+
+Added `stadiumName`/`stadiumCapacity` fields to `ClubListing` in
+`data/premierLeague0809.ts`, filled in for all 20 clubs. Stadium names and
+their 2008/09-era naming are real and era-accurate where it matters most —
+notably Manchester City's ground is named "City of Manchester Stadium",
+not the "Etihad Stadium" it became in 2011. Capacities are approximate,
+rounded figures for the period, not verified exact numbers.
+
+Attendance itself is **not** a real historical figure — there's no source
+for actual 2008/09 gate numbers per fixture in this project. `computeAttendance`
+in the new `utils/attendance.ts` simulates a plausible attendance as 82%-99%
+of the home club's capacity, deterministically hashed from the fixture id
+(reusing the same `hash01` string-hash pattern already used for rating
+variance in `engine/ratings.ts`) so the same fixture always shows the same
+number rather than changing between the live match screen and Full Time.
+Purely presentational — not read by the match engine, doesn't affect
+results. Shown as "{Stadium Name} · Attendance {number}" under the
+scoreboard in `MatchAnimationScreen.tsx` and under the "Full Time" heading
+in `MatchResultScreen.tsx`.

@@ -6,6 +6,7 @@ import { KitIcon } from '../components/ui/KitIcon';
 import { Panel } from '../components/ui/Panel';
 import type { ClubListing } from '../data/premierLeague0809';
 import type { Fixture, Position, Scorer } from '../engine/types';
+import { computeAttendance } from '../utils/attendance';
 
 const DURATION_MS = 9000;
 const TICK_MS = 300;
@@ -238,6 +239,9 @@ export function MatchAnimationScreen({
         </div>
         <div className="mx-1 mb-1 h-1.5 overflow-hidden rounded-full bg-ink/30">
           <div className="h-full bg-white/80 transition-all duration-300 ease-linear" style={{ width: `${(minute / 90) * 100}%` }} />
+        </div>
+        <div className="px-1 pb-1 text-center text-[11px] text-ink/60">
+          {homeClub.stadiumName} · Attendance {computeAttendance(fixture.id, homeClub.stadiumCapacity).toLocaleString()}
         </div>
       </Panel>
 
