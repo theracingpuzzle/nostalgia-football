@@ -23,6 +23,31 @@ function buildEmptySlots(formation: Formation): Slot[] {
   return expandSlots(formation).map((position, i) => ({ id: `slot-${i}`, position, playerId: null }));
 }
 
+/**
+ * Switching formation used to wipe the whole XI back to empty — a usability
+ * fix on top of that, not a faithfulness claim either way (the original's
+ * actual behavior here isn't confirmed, see PLAN.md). Carries players over
+ * by position: if the new formation needs the same or more of a position,
+ * everyone already there stays and any extra slots start empty; if it needs
+ * fewer, only the overflow (last ones in slot order) gets benched — so
+ * switching 4-4-2 -> 4-3-3 keeps all 4 DEF and 3 of the 4 MID, leaving just
+ * the new 3rd FWD slot and the bumped MID player to sort out.
+ */
+function transferSlotsToFormation(prevSlots: Slot[], nextFormation: Formation): Slot[] {
+  const playersByPosition = new Map<Position, string[]>();
+  for (const slot of prevSlots) {
+    if (!slot.playerId) continue;
+    const queue = playersByPosition.get(slot.position) ?? [];
+    queue.push(slot.playerId);
+    playersByPosition.set(slot.position, queue);
+  }
+
+  return expandSlots(nextFormation).map((position, i) => {
+    const playerId = playersByPosition.get(position)?.shift() ?? null;
+    return { id: `slot-${i}`, position, playerId };
+  });
+}
+
 /** "Tim Howard" -> "T. Howard" — pitch cards only, so a tight card still reads at a glance. Everywhere else (squad/subs lists, coach advice) keeps the full name. */
 function abbreviatePitchName(fullName: string): string {
   const parts = fullName.trim().split(/\s+/);
@@ -124,11 +149,13 @@ interface TeamSelectionScreenProps {
  * in one screen without scrolling — a usability call, not a claim about the
  * original's actual layout (still unconfirmed, see PLAN.md).
  *
- * Starts with every slot empty and a 1-keeper/4-outfield subs panel, and
- * stays empty on a formation change too — confirmed from a real screenshot
- * of the original's Select Your Team/Formation screen. "Coach's Help" fills
- * whatever's still empty with the strongest available XI; it doesn't touch
- * slots you've already placed yourself.
+ * Starts with every slot empty, confirmed from a real screenshot of the
+ * original's Select Your Team/Formation screen. Changing formation after
+ * that carries your picks over by position rather than wiping the XI (see
+ * transferSlotsToFormation) — a usability fix, not a faithfulness claim
+ * either way; the original's actual behavior here isn't confirmed. "Coach's
+ * Help" fills whatever's still empty with the strongest available XI; it
+ * doesn't touch slots you've already placed yourself.
  */
 export function TeamSelectionScreen({
   clubName,
@@ -165,7 +192,7 @@ export function TeamSelectionScreen({
   function handleFormationChange(nextFormationId: string) {
     const nextFormation = FORMATIONS.find((f) => f.id === nextFormationId) ?? FORMATIONS[0];
     setFormationId(nextFormationId);
-    setSlots(buildEmptySlots(nextFormation));
+    setSlots((prev) => transferSlotsToFormation(prev, nextFormation));
   }
 
   function handleCoachHelp() {

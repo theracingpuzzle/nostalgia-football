@@ -771,3 +771,21 @@ everything and unlocks Continue.
   is active (Goals/Assists/Yellow Cards/Red Cards), instead of all four
   stat columns regardless of which you'd picked — cleaner, and the sort
   tab you're on is now obviously also the only number on screen.
+
+## Formation change no longer wipes the whole XI
+
+Changing formation used to rebuild every slot empty, even for positions the
+new formation still needed the same number of. Replaced with
+`transferSlotsToFormation` in `TeamSelectionScreen.tsx`: carries players
+over by position — if the new formation needs the same or more of a
+position everyone already there stays (extra slots just start empty); if
+it needs fewer, only the overflow (last in slot order) gets bumped back to
+the bench. So 4-4-2 → 4-3-3 keeps all 4 DEF and 3 of the 4 MID, leaving
+just the new 3rd FWD slot and the bumped MID player to sort out — not a
+blank pitch. Also corrected a comment that had claimed wipe-on-change was
+"confirmed from a real screenshot" — that was true of the *starting* empty
+state, not of what happens on a later formation change, which was never
+actually confirmed either way; this is a usability choice, not a
+faithfulness claim. Verified live: switching 4-4-2 → 4-3-3 → 5-3-2 kept
+the same back four and attackers throughout, only ever touching the one
+changed position each time.
