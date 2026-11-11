@@ -572,3 +572,33 @@ disabled itself with no explanation. Fixed:
   so a month heavy on good forwards and light on standout defenders might
   come back as a 3-5-2 instead. Confirmed live: September came back as a
   genuine 3-5-2 rather than the old hardcoded shape.
+
+## Match animation: a real shot, not just wandering dots
+
+Addressed "the players just move around the screen and the ball doesn't
+actually go in the goal" — two separate problems in `MatchAnimationScreen.tsx`:
+
+- **The ball now visibly shoots and lands in the net.** Previously a goal
+  just teleported the ball near the edge of the pitch on the normal
+  900ms "wander" transition — easy to miss, no clear sense it had entered
+  the goal. Now a goal is a two-stage animation: the ball drifts to the
+  edge of the box (a windup), then — on a much faster 300ms transition —
+  is struck into the net, where a white pulse ring (`animate-ping`) confirms
+  it landed there. **Found and fixed a real bug while building this**: the
+  pulse was originally a single nullable value; when two goals land close
+  together (two goals a simulated minute apart are only ~100ms apart in this
+  9-second-per-match animation), the earlier goal's cleanup timer could fire
+  after the later goal's pulse was set, wiping it out before it was ever
+  seen. Fixed by keying each pulse with its own id in a list, each with its
+  own independent cleanup timer. Verified the underlying fix is sound via a
+  same-execution-context DOM check (confirming the pulse element really is
+  in the DOM ~100ms after being set) — the browser automation tooling used
+  this session proved too latency-prone to reliably screenshot a ~2-second
+  live event by itself, so that direct check stood in for a screenshot.
+- **Players now have a simple "momentum" sway** instead of pure independent
+  random wandering: one side periodically pushes further forward for a few
+  seconds (nudging their own FWD/MID dots, and the resting ball, toward the
+  opponent's goal) before the momentum swings to the other side. Cosmetic
+  only — not tied to the actual simulated score or chances — but reads as
+  waves of attack rather than 22 dots drifting with no relationship to each
+  other.

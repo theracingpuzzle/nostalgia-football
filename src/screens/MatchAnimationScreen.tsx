@@ -11,6 +11,8 @@ const DURATION_MS = 9000;
 const TICK_MS = 300;
 const JITTER_EVERY_N_TICKS = 3;
 const GOAL_HOLD_MS = 1800;
+const SHOT_WINDUP_MS = 350;
+const MOMENTUM_SWING_EVERY_N_TICKS = 10; // ~3s at TICK_MS=300
 
 type Role = Position;
 
@@ -67,12 +69,16 @@ function initialDots(): Dot[] {
 
 /**
  * A visual flourish on top of the placeholder match engine: zone-constrained
- * dots wander the pitch, the ball travels into the net on a goal, and a
- * scoreboard tracks the live score as it happens. This is NOT the original's
- * real match screen — no manager commands, no real player movement model,
- * nothing claimed as faithful. Built because you asked for visible action
- * and a working scoreboard; Stage 8 (the real thing) stays gated until its
- * actual mechanics are known (see PLAN.md).
+ * dots wander the pitch with a simple "momentum" sway (one side pushes
+ * forward for a few seconds, then the other), a goal plays out as a visible
+ * two-stage shot — the ball drifts to the edge of the box, then is struck
+ * into the net on a faster transition, with a pulse ring confirming it
+ * actually landed there — and a scoreboard tracks the live score as it
+ * happens. This is NOT the original's real match screen — no manager
+ * commands, no real player movement model, nothing claimed as faithful.
+ * Built because you asked for visible action and a working scoreboard;
+ * Stage 8 (the real thing) stays gated until its actual mechanics are known
+ * (see PLAN.md).
  */
 export function MatchAnimationScreen({
   fixture,
@@ -88,6 +94,12 @@ export function MatchAnimationScreen({
   const result = fixture.result;
   const [dots, setDots] = useState<Dot[]>(initialDots);
   const [ball, setBall] = useState({ x: 50, y: 50 });
+  const [shooting, setShooting] = useState(false);
+  // A list, not a single value — goals can land close together (two goals a
+  // simulated minute apart are only ~100ms apart in real animation time), and
+  // a single shared pulse would have one goal's cleanup timer wipe out
+  // another's still-active pulse. Each pulse owns its own id and timer.
+  const [goalPulses, setGoalPulses] = useState<{ id: number; side: 'home' | 'away'; y: number }[]>([]);
   const [minute, setMinute] = useState(0);
   const [flash, setFlash] = useState<string | null>(null);
   const [ticker, setTicker] = useState<string>('Kick off');
@@ -96,6 +108,10 @@ export function MatchAnimationScreen({
   const [liveHomeScorers, setLiveHomeScorers] = useState<Scorer[]>([]);
   const [liveAwayScorers, setLiveAwayScorers] = useState<Scorer[]>([]);
   const firedRef = useRef(new Set<number>());
+  // Guards the periodic "wander" jitter from fighting with an in-progress
+  // shot's own ball updates — a ref rather than state since it's read inside
+  // the same setInterval closure that's only created once per match.
+  const shotInProgressRef = useRef(false);
 
   useEffect(() => {
     if (!result) {
@@ -103,6 +119,7 @@ export function MatchAnimationScreen({
       return;
     }
 
+    shotInProgressRef.current = false;
     let tick = 0;
 
     const interval = setInterval(() => {
@@ -134,15 +151,52 @@ export function MatchAnimationScreen({
             }
           }
           // Home attacks right (away's net); away attacks left (home's net).
-          setBall({ x: event.side === 'home' ? 97 : 3, y: 50 + (Math.random() * 16 - 8) });
+          // A two-stage "shot": the ball first drifts to the edge of the box
+          // (a windup), then — on a faster transition — is visibly struck
+          // into the net, where a pulse ring confirms it actually landed
+          // there rather than just hovering near the touchline.
+          const netY = 50 + (Math.random() * 10 - 5);
+          const approachX = event.side === 'home' ? 78 : 22;
+          const netX = event.side === 'home' ? 98 : 2;
+          const pulseId = Math.random();
+          shotInProgressRef.current = true;
+          setShooting(false);
+          setBall({ x: approachX, y: netY });
+          setTimeout(() => {
+            setShooting(true);
+            setBall({ x: netX, y: netY });
+            setGoalPulses((prev) => [...prev, { id: pulseId, side: event.side, y: netY }]);
+          }, SHOT_WINDUP_MS);
           setTimeout(() => setFlash(null), 1500);
-          setTimeout(() => setBall({ x: 50, y: 50 }), GOAL_HOLD_MS);
+          setTimeout(() => setGoalPulses((prev) => prev.filter((p) => p.id !== pulseId)), SHOT_WINDUP_MS + GOAL_HOLD_MS);
+          setTimeout(() => {
+            setShooting(false);
+            setBall({ x: 50, y: 50 });
+            shotInProgressRef.current = false;
+          }, SHOT_WINDUP_MS + GOAL_HOLD_MS);
         }
       });
 
       if (tick % JITTER_EVERY_N_TICKS === 0) {
-        setDots((prev) => prev.map((d) => ({ ...d, x: randomJitter(d.x, d.xMin, d.xMax, 10), y: randomJitter(d.y, 4, 96, 16) })));
-        setBall((prev) => ({ x: randomJitter(prev.x, 25, 75, 10), y: randomJitter(prev.y, 15, 85, 10) }));
+        // A simple "momentum" sway — one side periodically pushes further
+        // forward for a few seconds before it swings back — so the dots
+        // read as waves of attack rather than aimless wandering. Cosmetic
+        // only, not tied to the actual simulated score or chances.
+        const attackingSide: 'home' | 'away' = Math.floor(tick / MOMENTUM_SWING_EVERY_N_TICKS) % 2 === 0 ? 'home' : 'away';
+        setDots((prev) =>
+          prev.map((d) => {
+            const push = d.side === attackingSide && (d.role === 'FWD' || d.role === 'MID') ? (d.side === 'home' ? 4 : -4) : 0;
+            const biasedX = Math.max(d.xMin, Math.min(d.xMax, d.x + push));
+            return { ...d, x: randomJitter(biasedX, d.xMin, d.xMax, 10), y: randomJitter(d.y, 4, 96, 16) };
+          }),
+        );
+        if (!shotInProgressRef.current) {
+          setBall((prev) => {
+            const push = attackingSide === 'home' ? 3 : -3;
+            const biasedX = Math.max(25, Math.min(75, prev.x + push));
+            return { x: randomJitter(biasedX, 25, 75, 10), y: randomJitter(prev.y, 15, 85, 10) };
+          });
+        }
       }
 
       if (elapsed >= DURATION_MS) {
@@ -209,9 +263,20 @@ export function MatchAnimationScreen({
         ))}
 
         <div
-          className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_3px_rgba(0,0,0,0.9)] transition-all duration-[900ms] ease-linear"
+          className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_3px_rgba(0,0,0,0.9)] ease-linear ${
+            shooting ? 'transition-all duration-[300ms]' : 'transition-all duration-[900ms]'
+          }`}
           style={{ left: `${ball.x}%`, top: `${ball.y}%` }}
         />
+
+        {goalPulses.map((p) => (
+          <div
+            key={p.id}
+            aria-hidden
+            className="pointer-events-none absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-white/80"
+            style={{ left: `${p.side === 'home' ? 97 : 3}%`, top: `${p.y}%` }}
+          />
+        ))}
 
         {flash && (
           <div className="absolute inset-x-0 top-1/3 flex justify-center">
