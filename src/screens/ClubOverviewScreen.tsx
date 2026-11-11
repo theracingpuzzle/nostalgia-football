@@ -111,7 +111,7 @@ export function ClubOverviewScreen({
                   <tr key={p.id} className={`border-b border-ink/10 ${i % 2 === 0 ? 'bg-white/60' : 'bg-white/30'}`}>
                     <td className={`px-2 py-1.5 font-semibold ${p.injured ? 'text-pink-700' : 'text-ink'}`}>
                       {p.name}
-                      {p.injured ? ' (inj)' : ''}
+                      {p.injured ? ` (inj${p.injuryReturnMatchday ? `, back MD${p.injuryReturnMatchday}` : ''})` : ''}
                     </td>
                     <td className="px-2 py-1.5 text-ink/80">{p.position}</td>
                     <td className="px-2 py-1.5 text-right text-ink/80">{stat?.appearances ?? 0}</td>

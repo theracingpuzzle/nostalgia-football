@@ -76,10 +76,10 @@ export const REAL_SQUADS_2008_09: Record<string, Player[]> = {
   everton: [
     mk('Tim Howard', 'GK', 29), mk('Iain Turner', 'GK', 25),
     mk('Tony Hibbert', 'DEF', 27), mk('Leighton Baines', 'DEF', 23), mk('Joleon Lescott', 'DEF', 26),
-    mk('Phil Jagielka', 'DEF', 26), mk('Joseph Yobo', 'DEF', 28, true), mk('John Heitinga', 'DEF', 24),
+    mk('Phil Jagielka', 'DEF', 26), mk('Joseph Yobo', 'DEF', 28), mk('John Heitinga', 'DEF', 24),
     mk('Mikel Arteta', 'MID', 26), mk('Leon Osman', 'MID', 27), mk('Marouane Fellaini', 'MID', 20),
     mk('Steven Pienaar', 'MID', 26), mk('Phil Neville', 'MID', 31), mk('Tim Cahill', 'MID', 28),
-    mk('Yakubu Aiyegbeni', 'FWD', 25), mk('Louis Saha', 'FWD', 29, true), mk('Victor Anichebe', 'FWD', 20),
+    mk('Yakubu Aiyegbeni', 'FWD', 25), mk('Louis Saha', 'FWD', 29), mk('Victor Anichebe', 'FWD', 20),
   ],
   'aston-villa': [
     mk('Brad Friedel', 'GK', 37), mk('Stuart Taylor', 'GK', 27),
@@ -93,7 +93,7 @@ export const REAL_SQUADS_2008_09: Record<string, Player[]> = {
     mk('Mark Schwarzer', 'GK', 36), mk('David Stockdale', 'GK', 22),
     mk('Paul Konchesky', 'DEF', 27), mk('Aaron Hughes', 'DEF', 28), mk('Brede Hangeland', 'DEF', 27), mk('Chris Baird', 'DEF', 26),
     mk('Danny Murphy', 'MID', 31), mk('Dickson Etuhu', 'MID', 26), mk('Simon Davies', 'MID', 28),
-    mk('Jimmy Bullard', 'MID', 29, true), mk('Zoltan Gera', 'MID', 29),
+    mk('Jimmy Bullard', 'MID', 29), mk('Zoltan Gera', 'MID', 29),
     mk('Bobby Zamora', 'FWD', 27), mk('Diomansy Kamara', 'FWD', 27), mk('Andy Johnson', 'FWD', 27),
   ],
   tottenham: [
@@ -109,7 +109,7 @@ export const REAL_SQUADS_2008_09: Record<string, Player[]> = {
     mk('Lucas Neill', 'DEF', 30), mk('Matthew Upson', 'DEF', 29), mk('James Collins', 'DEF', 24), mk('Herita Ilunga', 'DEF', 25),
     mk('Mark Noble', 'MID', 21), mk('Scott Parker', 'MID', 27), mk('Valon Behrami', 'MID', 23),
     mk('Jack Collison', 'MID', 19), mk('Freddie Ljungberg', 'MID', 31), mk('Luis Boa Morte', 'MID', 30),
-    mk('Carlton Cole', 'FWD', 24), mk('Dean Ashton', 'FWD', 24, true),
+    mk('Carlton Cole', 'FWD', 24), mk('Dean Ashton', 'FWD', 24),
   ],
   'man-city': [
     mk('Joe Hart', 'GK', 21), mk('Kasper Schmeichel', 'GK', 21),

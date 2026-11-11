@@ -147,6 +147,14 @@ export function TeamSelectionScreen({
   }
 
   const playersById = useMemo(() => new Map(squad.map((p) => [p.id, p])), [squad]);
+
+  // A player already placed on the pitch can become injured between visits
+  // to this screen (after playing a match) — clear their slot automatically
+  // rather than leaving an injured player looking like a valid starter.
+  useEffect(() => {
+    setSlots((prev) => prev.map((slot) => (slot.playerId && playersById.get(slot.playerId)?.injured ? { ...slot, playerId: null } : slot)));
+  }, [playersById]);
+
   const xiIds = useMemo(() => new Set(slots.map((s) => s.playerId).filter((id): id is string => id !== null)), [slots]);
   const substitutes = squad.filter((p) => !xiIds.has(p.id));
   const injuredPlayers = useMemo(() => squad.filter((p) => p.injured), [squad]);
@@ -285,7 +293,12 @@ export function TeamSelectionScreen({
             {showCoachAdvice ? (
               <ul className="list-disc space-y-1 pl-4 text-xs text-ink/80">
                 {injuredPlayers.length > 0 ? (
-                  <li>Injured: {injuredPlayers.map((p) => p.name).join(', ')}</li>
+                  <li>
+                    Injured:{' '}
+                    {injuredPlayers
+                      .map((p) => (p.injuryReturnMatchday ? `${p.name} (back MD${p.injuryReturnMatchday})` : p.name))
+                      .join(', ')}
+                  </li>
                 ) : (
                   <li>No fresh injury concerns.</li>
                 )}

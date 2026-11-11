@@ -24,9 +24,14 @@ function rating(player: Player): number {
 export function pickBestXI(club: Club, formation: Formation): Player[] {
   const chosen: Player[] = [];
   const used = new Set<string>();
+  // Injured players sit out, same as a manager picking the managed club's XI
+  // can't select them — with a safety net for the rare case a club has
+  // fewer than 11 fit players, so a match always has a full XI to simulate.
+  const fit = club.players.filter((p) => !p.injured);
+  const pool = fit.length >= 11 ? fit : club.players;
 
   for (const slot of formation.slots) {
-    const candidates = club.players
+    const candidates = pool
       .filter((player) => player.position === slot.position && !used.has(player.id))
       .sort((a, b) => rating(b) - rating(a));
 
@@ -40,7 +45,7 @@ export function pickBestXI(club: Club, formation: Formation): Player[] {
   }
 
   if (chosen.length < 11) {
-    const rest = club.players.filter((player) => !used.has(player.id)).sort((a, b) => rating(b) - rating(a));
+    const rest = pool.filter((player) => !used.has(player.id)).sort((a, b) => rating(b) - rating(a));
     for (const player of rest) {
       if (chosen.length >= 11) break;
       chosen.push(player);

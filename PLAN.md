@@ -602,3 +602,39 @@ actually go in the goal" — two separate problems in `MatchAnimationScreen.tsx`
   only — not tied to the actual simulated score or chances — but reads as
   waves of attack rather than 22 dots drifting with no relationship to each
   other.
+
+## Simulated injuries (new addition, league-wide)
+
+Previously `Player.injured` was a static flag — 4 specific real players
+hardcoded as injured for the whole season, never recovering, nobody else
+ever hurt. Replaced with an actual simulated mechanic, same spirit as
+morale/ratings/transfer window: a new addition, not confirmed from the
+original.
+
+- **`engine/injuries.ts`**: after every matchday, every player who actually
+  started a match (for *any* of the 20 clubs, not just the managed one) has
+  a small independent chance (3%) of picking up an injury, out for a random
+  number of matchdays (mostly a 1-2 matchday knock, sometimes a 3-4 matchday
+  strain, occasionally a longer 5-8 matchday lay-off). An injured player
+  recovers automatically once the matchday reaches their stored
+  `injuryReturnMatchday`. Driven by the same seeded random generator the
+  match engine itself uses (one continuous sequence advanced by
+  `CareerScreen.playNextFixture`), so a career replays identically from its
+  starting seed, same guarantee the matches already had.
+- **`engine/squadAuto.ts` (`pickBestXI`) fix**: AI-controlled clubs now also
+  avoid fielding injured players (previously didn't check at all — harmless
+  before since injuries never changed, became a real gap once AI squads can
+  genuinely have players out). Falls back to including them only if a club
+  somehow has fewer than 11 fit players, so a match always has a full XI.
+- **Found and fixed a real bug while verifying this**: Team Selection keeps
+  its own pitch-slot state locally and was never told when a player already
+  placed in the XI became injured after a match — the pitch kept showing an
+  injured player as a valid starter. Fixed with a `useEffect` in
+  `TeamSelectionScreen` that clears any slot whose occupant has since become
+  injured, whenever the squad prop updates. Verified live: an injury on a
+  starting XI player correctly knocked the "Starting XI" count down (e.g.
+  11/11 → 9/11 for two simultaneous injuries) and Coach's Help correctly
+  refilled with fit replacements.
+- Coach's Help and the club overview screen both now show the return
+  matchday next to an injured player's name (e.g. "Tim Howard (back MD10)"),
+  not just the fact that they're out.

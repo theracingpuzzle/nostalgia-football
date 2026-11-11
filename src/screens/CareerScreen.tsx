@@ -4,7 +4,7 @@ import { SQUADS_BY_CLUB_ID } from '../data/clubSquads';
 import { DEFAULT_FORMATION_ID, FORMATIONS } from '../data/formations';
 import type { ClubListing } from '../data/premierLeague0809';
 import { PREMIER_LEAGUE_2008_09 } from '../data/premierLeague0809';
-import { computeLeagueTable, computeMonthlyPlayerStats, generateFixtures, pickBestXI, simulateMatch } from '../engine';
+import { applyInjuryUpdates, computeLeagueTable, computeMonthlyPlayerStats, createRandom, generateFixtures, pickBestXI, simulateMatch } from '../engine';
 import type { Fixture, Player } from '../engine/types';
 import { FixturesScreen } from './FixturesScreen';
 import { LeagueTableScreen } from './LeagueTableScreen';
@@ -220,6 +220,7 @@ export function CareerScreen({
 
     let seed = nextSeed;
     const resultsByFixtureId = new Map<string, ReturnType<typeof simulateMatch>>();
+    const playedPlayerIdsByClub: Record<string, string[]> = {};
 
     for (const fixture of fixturesThisMatchday) {
       const isManagedHome = fixture.homeClubId === club.id;
@@ -244,6 +245,8 @@ export function CareerScreen({
       const result = simulateMatch({ fixtureId: fixture.id, home: homeInput, away: awayInput, seed });
       seed += 1;
       resultsByFixtureId.set(fixture.id, result);
+      playedPlayerIdsByClub[fixture.homeClubId] = result.homeXI;
+      playedPlayerIdsByClub[fixture.awayClubId] = result.awayXI;
       if (isManagedHome || isManagedAway) managedFixtureId = fixture.id;
     }
 
@@ -251,6 +254,19 @@ export function CareerScreen({
       const result = resultsByFixtureId.get(f.id);
       return result ? { ...f, played: true, result } : f;
     }));
+
+    // Injuries/recoveries for every club, not just the one you manage — uses
+    // the next seed in the same sequence as the matches themselves, so a
+    // career replays identically from its starting seed.
+    const injuryRandom = createRandom(seed);
+    seed += 1;
+    const updatedAllSquads = applyInjuryUpdates(allSquads, matchday, playedPlayerIdsByClub, injuryRandom);
+    setAllSquads(updatedAllSquads);
+    // A player newly injured mid-season can't stay in your selected XI —
+    // same rule as picking the team in the first place.
+    const stillFitIds = new Set((updatedAllSquads[club.id] ?? []).filter((p) => !p.injured).map((p) => p.id));
+    setSelectedXI((prev) => prev.filter((id) => stillFitIds.has(id)));
+
     setNextSeed(seed);
     setLastPlayedFixtureId(managedFixtureId);
     setShowingAnimation(true);

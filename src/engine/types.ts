@@ -17,7 +17,9 @@ export interface Player {
   position: Position;
   age: number;
   squadNumber?: number;
-  injured?: boolean; // visual flag only (pink highlight) — no injury mechanic wired up yet
+  injured?: boolean;
+  /** Set only while injured=true — the matchday this player becomes available again. See engine/injuries.ts. */
+  injuryReturnMatchday?: number;
   attributes: PlayerAttributes;
 }
 
