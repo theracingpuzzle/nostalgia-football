@@ -23,6 +23,14 @@ function buildEmptySlots(formation: Formation): Slot[] {
   return expandSlots(formation).map((position, i) => ({ id: `slot-${i}`, position, playerId: null }));
 }
 
+/** "Tim Howard" -> "T. Howard" — pitch cards only, so a tight card still reads at a glance. Everywhere else (squad/subs lists, coach advice) keeps the full name. */
+function abbreviatePitchName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return fullName;
+  const [first, ...rest] = parts;
+  return `${first[0]}. ${rest.join(' ')}`;
+}
+
 /**
  * "Coach's Help": fills only the currently-empty slots, leaving anything
  * already manually placed untouched. Builds a one-off mini formation shaped
@@ -253,89 +261,88 @@ export function TeamSelectionScreen({
 
   const filledCount = slots.filter((s) => s.playerId !== null).length;
 
-  return (
-    <div className="mx-auto max-w-6xl p-3 text-white">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="flex min-w-0 items-center gap-1.5 text-base font-black uppercase tracking-wide md:gap-2 md:text-xl">
-          <ClubCrest primaryColor={primaryColor} secondaryColor={secondaryColor} label={clubShortName} crestPath={crestPath} size={28} />
-          <span className="truncate">{clubName} — Team Selection</span>
-        </h2>
-        <span
-          className={`shrink-0 whitespace-nowrap rounded-sm border-2 px-2 py-1 text-xs font-bold md:px-2.5 md:py-1.5 md:text-sm ${filledCount === 11 ? 'border-green-300 bg-green-800' : 'border-amber-300 bg-amber-800'}`}
-        >
-          Starting XI: {filledCount} / 11
-        </span>
+  const formationPanel = (
+    <Panel title="Formation" accentColor={primaryColor}>
+      <div className="flex flex-row flex-wrap gap-1.5 lg:flex-col">
+        {FORMATIONS.map((f) => {
+          const selected = f.id === formationId;
+          return (
+            <Button
+              key={f.id}
+              variant="secondary"
+              className="flex-1 lg:w-full"
+              onClick={() => handleFormationChange(f.id)}
+              style={selected ? { backgroundColor: primaryColor, borderColor: secondaryColor, color: contrastText } : undefined}
+            >
+              {f.name}
+            </Button>
+          );
+        })}
       </div>
+    </Panel>
+  );
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[220px_1fr]">
-        {/* Sidebar */}
-        <div className="flex flex-col gap-3">
-          <Panel title="Formation" accentColor={primaryColor}>
-            <div className="flex flex-col gap-1.5">
-              {FORMATIONS.map((f) => {
-                const selected = f.id === formationId;
-                return (
-                  <Button
-                    key={f.id}
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() => handleFormationChange(f.id)}
-                    style={selected ? { backgroundColor: primaryColor, borderColor: secondaryColor, color: contrastText } : undefined}
-                  >
-                    {f.name}
-                  </Button>
-                );
-              })}
-            </div>
-          </Panel>
-
-          <Panel title="Coach says..." accentColor={primaryColor}>
-            {showCoachAdvice ? (
-              <ul className="list-disc space-y-1 pl-4 text-xs text-ink/80">
+  const coachPanel = (
+    <Panel title="Coach says..." accentColor={primaryColor}>
+      {showCoachAdvice ? (
+              <ul className="space-y-1.5 text-xs text-ink/80">
                 {injuredPlayers.length > 0 ? (
-                  <li>
-                    Injured:{' '}
-                    {injuredPlayers
-                      .map((p) => (p.injuryReturnMatchday ? `${p.name} (back MD${p.injuryReturnMatchday})` : p.name))
-                      .join(', ')}
+                  <li className="flex gap-1.5">
+                    <span aria-hidden>🏥</span>
+                    <span>
+                      {injuredPlayers
+                        .map((p) => (p.injuryReturnMatchday ? `${p.name} (back MD${p.injuryReturnMatchday})` : p.name))
+                        .join(', ')}
+                    </span>
                   </li>
                 ) : (
-                  <li>No fresh injury concerns.</li>
-                )}
-                {unsettledPlayers.length > 0 && (
-                  <li>Unsettled, wants game time: {unsettledPlayers.map((p) => p.name).join(', ')}</li>
-                )}
-                {lowConfidencePlayers.length > 0 && (
-                  <li>Short of confidence lately: {lowConfidencePlayers.map((p) => p.name).join(', ')}</li>
-                )}
-                {inFormSuggestion && (
-                  <li>
-                    In great form: <strong>{inFormSuggestion.player.name}</strong> ({inFormSuggestion.stat?.averageRating.toFixed(1)} avg) isn't in your XI yet.
+                  <li className="flex gap-1.5">
+                    <span aria-hidden>✅</span>
+                    <span>No fresh injury concerns.</span>
                   </li>
                 )}
-                <li className="list-none pl-0 text-[10px] italic text-ink/50">
+                {unsettledPlayers.length > 0 && (
+                  <li className="flex gap-1.5">
+                    <span aria-hidden>😠</span>
+                    <span>Wants game time: {unsettledPlayers.map((p) => p.name).join(', ')}</span>
+                  </li>
+                )}
+                {lowConfidencePlayers.length > 0 && (
+                  <li className="flex gap-1.5">
+                    <span aria-hidden>📉</span>
+                    <span>Short of confidence: {lowConfidencePlayers.map((p) => p.name).join(', ')}</span>
+                  </li>
+                )}
+                {inFormSuggestion && (
+                  <li className="flex gap-1.5">
+                    <span aria-hidden>⭐</span>
+                    <span>
+                      <strong>{inFormSuggestion.player.name}</strong> is in great form ({inFormSuggestion.stat?.averageRating.toFixed(1)} avg) and isn't in your XI yet.
+                    </span>
+                  </li>
+                )}
+                <li className="pt-0.5 text-[10px] italic text-ink/50">
                   (Morale and form here are a new addition, worked out from this season's appearances and ratings — not confirmed from the original.)
                 </li>
               </ul>
             ) : (
               <p className="text-xs text-ink/70">Click Coach's Help for a squad summary and to fill any empty slots.</p>
             )}
-            <Button variant="secondary" className="mt-2 w-full" onClick={handleCoachHelp}>
-              Coach's Help
-            </Button>
-          </Panel>
+      <Button variant="secondary" className="mt-2 w-full" onClick={handleCoachHelp}>
+        Coach's Help
+      </Button>
+    </Panel>
+  );
 
-          {onContinue && (
-            <Button className="w-full" style={{ backgroundColor: primaryColor, borderColor: secondaryColor, color: contrastText }} onClick={onContinue}>
-              Continue
-            </Button>
-          )}
-        </div>
+  const continueButton = onContinue ? (
+    <Button className="w-full" style={{ backgroundColor: primaryColor, borderColor: secondaryColor, color: contrastText }} onClick={onContinue}>
+      Continue
+    </Button>
+  ) : null;
 
-        {/* Main area */}
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_210px]">
-            <Panel title={`Pitch (${formation.name}) — drag, or tap a player then tap a slot`} accentColor={primaryColor}>
+  const pitchAndSubs = (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_210px]">
+      <Panel title={`Pitch (${formation.name}) — drag, or tap a player then tap a slot`} accentColor={primaryColor}>
               {/*
                 Portrait (down the page) on mobile for usability, landscape
                 (left-to-right, matching the real reference screenshot) from
@@ -412,44 +419,89 @@ export function TeamSelectionScreen({
                 ))}
               </ul>
             </Panel>
-          </div>
+    </div>
+  );
 
-          <Panel title="Squad" accentColor={primaryColor}>
-            <div className="mb-1.5 flex items-center gap-3 text-[10px] text-ink/60">
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-green-500" /> Good morale
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-gray-400" /> Neutral
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-red-500" /> Unhappy
-              </span>
-            </div>
-            <ul
-              className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto text-sm sm:grid-cols-2 md:grid-cols-3"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                dropOnBench(e.dataTransfer.getData('text/plain'));
-              }}
-            >
-              {squad.map((p) => {
-                const inXI = xiIds.has(p.id);
-                return (
-                  <DraggableRow
-                    key={p.id}
-                    player={p}
-                    highlight={inXI}
-                    highlightColor={primaryColor}
-                    morale={moraleByPlayerId.get(p.id)}
-                    isSelected={p.id === selectedPlayerId}
-                    onTap={() => handleTap(p.id, null)}
-                  />
-                );
-              })}
-            </ul>
-          </Panel>
+  const squadPanel = (
+    <Panel title="Squad" accentColor={primaryColor}>
+      <div className="mb-1.5 flex items-center gap-3 text-[10px] text-ink/60">
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded-full bg-green-500" /> Good morale
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded-full bg-gray-400" /> Neutral
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-2 w-2 rounded-full bg-red-500" /> Unhappy
+        </span>
+      </div>
+      <ul
+        className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto text-sm sm:grid-cols-2 md:grid-cols-3"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          dropOnBench(e.dataTransfer.getData('text/plain'));
+        }}
+      >
+        {squad.map((p) => {
+          const inXI = xiIds.has(p.id);
+          return (
+            <DraggableRow
+              key={p.id}
+              player={p}
+              highlight={inXI}
+              highlightColor={primaryColor}
+              morale={moraleByPlayerId.get(p.id)}
+              isSelected={p.id === selectedPlayerId}
+              onTap={() => handleTap(p.id, null)}
+            />
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+
+  return (
+    <div className="mx-auto max-w-6xl p-3 text-white">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-1.5 text-base font-black uppercase tracking-wide md:gap-2 md:text-xl">
+          <ClubCrest primaryColor={primaryColor} secondaryColor={secondaryColor} label={clubShortName} crestPath={crestPath} size={28} />
+          <span className="truncate">{clubName} — Team Selection</span>
+        </h2>
+        <span
+          className={`shrink-0 whitespace-nowrap rounded-sm border-2 px-2 py-1 text-xs font-bold md:px-2.5 md:py-1.5 md:text-sm ${filledCount === 11 ? 'border-green-300 bg-green-800' : 'border-amber-300 bg-amber-800'}`}
+        >
+          Starting XI: {filledCount} / 11
+        </span>
+      </div>
+
+      {/*
+        Mobile (below lg): pitch comes right after the formation picker,
+        promoted above Coach's Help/Continue — previously the sidebar
+        (formation + advice + continue) stacked above the pitch on narrow
+        screens, pushing the actual football view a long way down the page.
+        Desktop keeps the original sidebar + main-area layout, driven by
+        `order`/`lg:order` below rather than duplicating the expensive parts
+        (pitch, substitutes, squad) — only the small, cheap panels
+        (formation/coach/continue) are rendered twice, once per layout.
+      */}
+      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[220px_1fr] lg:items-start">
+        <div className="order-1 lg:hidden">{formationPanel}</div>
+
+        <div className="order-2 lg:order-2 flex flex-col gap-3">
+          {pitchAndSubs}
+          {squadPanel}
+        </div>
+
+        <div className="order-3 flex flex-col gap-3 lg:hidden">
+          {coachPanel}
+          {continueButton}
+        </div>
+
+        <div className="hidden lg:order-1 lg:flex lg:flex-col lg:gap-3">
+          {formationPanel}
+          {coachPanel}
+          {continueButton}
         </div>
       </div>
     </div>
@@ -550,7 +602,7 @@ function PitchSlotView({
           className="w-full cursor-grab break-words rounded-sm border-2 px-1 py-1 text-center text-[11px] font-bold leading-tight shadow-[1px_1px_0_rgba(0,0,0,0.4)] active:cursor-grabbing md:px-2 md:text-sm"
           style={{ backgroundColor: primaryColor, borderColor: secondaryColor, color: getContrastTextColor(primaryColor) }}
         >
-          {player.name}
+          {abbreviatePitchName(player.name)}
           <div className="text-[8px] font-normal opacity-70 md:text-[10px]">{player.position}</div>
         </div>
       ) : (

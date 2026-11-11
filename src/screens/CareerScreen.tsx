@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CareerNav, type CareerScreenId } from '../components/layout/CareerNav';
 import { SQUADS_BY_CLUB_ID } from '../data/clubSquads';
 import { DEFAULT_FORMATION_ID, FORMATIONS } from '../data/formations';
@@ -130,6 +130,16 @@ export function CareerScreen({
   onChangeClub: () => void;
 }) {
   const [screen, setScreen] = useState<CareerScreenId>('team');
+
+  // Switching tabs (or landing back on Team Selection after a match) should
+  // open at the top of that screen, not wherever the page happened to be
+  // scrolled to before — Team Selection in particular stays mounted (just
+  // hidden) between visits, so without this it can reopen scrolled partway
+  // down the pitch from a previous visit.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [screen]);
+
   const [formationId, setFormationId] = useState(DEFAULT_FORMATION_ID);
   const [selectedXI, setSelectedXI] = useState<string[]>([]);
   const [fixtures, setFixtures] = useState<Fixture[]>(() => generateFixtures(ALL_CLUB_IDS));

@@ -663,3 +663,28 @@ stretch of being overlooked before judging someone unsettled: at least 6
 games played (was 3) and under 20% of appearances (was under 34%). Verified
 live: an unused player shows no bad-tone morale through 8 played matches now
 (previously would have flagged by match 3).
+
+## Team Selection: pitch names, mobile layout order
+
+- **Pitch cards abbreviate the first name** ("Tim Howard" → "T. Howard") —
+  pitch cards only, via a new `abbreviatePitchName` helper in
+  `TeamSelectionScreen.tsx`. Squad list, substitutes list, and Coach's Help
+  advice all keep full names, as asked.
+- **Mobile layout reordered**: previously the sidebar (Formation picker +
+  Coach's Help/advice + Continue) stacked *above* the pitch on narrow
+  screens — on a real squad with injury/morale notes, that could push the
+  actual pitch most of the way down the page before a manager ever saw it.
+  Below the `lg` breakpoint the pitch (and Substitutes, Squad) now comes
+  right after a compacted horizontal Formation row; Coach's Help and
+  Continue follow after the squad. Desktop's original sidebar + main-area
+  layout is untouched — driven by `order`/`lg:order` utility classes on four
+  extracted panel pieces (formation/coach/continue/main-area), not by
+  duplicating the expensive parts (pitch, substitutes, squad stay rendered
+  exactly once); only the cheap small panels render twice, once per layout.
+  Verified in the browser at 375px and 1024px.
+- **Coach's Help advice is now icon-prefixed** (🏥 injuries, 😠 unsettled, 📉
+  low confidence, ⭐ in-form) instead of a plain bulleted list — scans faster.
+- **Screen switches now scroll to the top** (`CareerScreen` added a
+  `useEffect` on `screen`) — Team Selection in particular stays mounted
+  (just hidden) between visits, so without this a manager could land back
+  on it still scrolled partway down from an earlier visit.
