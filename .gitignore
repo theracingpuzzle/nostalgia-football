@@ -12,9 +12,11 @@ dist
 dist-ssr
 *.local
 
-# Real club crests (trademarked logos, downloaded for this private build only —
-# see PLAN.md. Not committed so they never end up pushed/shared anywhere.)
+# Real club crests and league logos (trademarked, downloaded for this
+# private build only — see PLAN.md). Not committed from here; the docs/
+# build-output copy is what actually gets deployed.
 /public/crests/
+/public/leagues/
 
 # Playwright
 /test-results/

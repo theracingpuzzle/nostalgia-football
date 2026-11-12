@@ -1073,3 +1073,32 @@ up later.
   correctly resuming "Real Madrid (La Liga)" — and a fresh Premier League
   career, confirming zero regression (transfer headlines stayed
   Premier-League-only, fixtures/table/stats all unaffected).
+
+## League logos on the Choose a League screen
+
+User request: show each league's real 2008/09 title-sponsor logo on the
+new league-select screen, not just plain text. Era-matched, same spirit
+as the rest of the project (e.g. Man City's stadium not yet being called
+the Etihad):
+
+- **Premier League**: the Barclays Premier League lion crest (used
+  2007-2016, so exactly era-correct for 2008/09) — `public/leagues/premier-league.png`.
+  This one is **not** sourced from Wikipedia like the club crests are:
+  the file was deleted from Wikipedia at some point (non-free logos get
+  removed once a sponsorship ends and they no longer illustrate current
+  content), so it isn't available there anymore. Sourced instead from
+  sportslogohistory.com, a sports-logo archive site, under the same
+  "private, non-distributed build" basis already established for the
+  real (trademarked) club crests — confirmed with the user before
+  fetching from a different site than usual.
+- **La Liga**: the "Liga BBVA" wordmark — BBVA sponsored La Liga from
+  2008/09 through 2015/16, so this (not the current La Liga logo) is the
+  era-correct one. `public/leagues/la-liga.svg`, sourced from Wikimedia
+  Commons (`Liga_BBVA.svg`), same as the club crests.
+- `LeagueDefinition` gained an optional `logoPath` (same relative-path,
+  no-leading-slash convention as `ClubListing.crestPath`, so it also
+  works under GitHub Pages' sub-path). `LeagueSelectScreen.tsx` renders
+  it at a fixed height with `object-contain`, since the two logos have
+  very different native aspect ratios (a roughly-square badge vs. a wide
+  wordmark) — falls back to just the league name if a future league
+  doesn't have one sourced yet.

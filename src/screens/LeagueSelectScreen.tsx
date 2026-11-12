@@ -2,7 +2,14 @@ import { useEffect } from 'react';
 import { Panel } from '../components/ui/Panel';
 import { LEAGUES } from '../data/leagues';
 
-/** Picking a league before a club — the first league added beyond the Premier League is La Liga (see PLAN.md for the multi-league expansion and what's still Premier-League-only). */
+/**
+ * Picking a league before a club — the first league added beyond the
+ * Premier League is La Liga (see PLAN.md for the multi-league expansion
+ * and what's still Premier-League-only). Shows each league's real
+ * 2008/09 title-sponsor logo (Barclays Premier League / Liga BBVA) where
+ * one's been sourced — see PLAN.md for where these came from and the
+ * same "private, non-distributed build" caveat as the club crests.
+ */
 export function LeagueSelectScreen({ onSelectLeague }: { onSelectLeague: (leagueId: string) => void }) {
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -19,10 +26,17 @@ export function LeagueSelectScreen({ onSelectLeague }: { onSelectLeague: (league
             <button
               key={league.id}
               onClick={() => onSelectLeague(league.id)}
-              className="flex items-center justify-between rounded-sm border-2 border-ink/30 bg-white/70 px-3 py-2.5 text-left transition hover:border-pitch-dark hover:bg-white"
+              className="flex items-center justify-between gap-3 rounded-sm border-2 border-ink/30 bg-white/70 px-3 py-2.5 text-left transition hover:border-pitch-dark hover:bg-white"
             >
-              <span className="text-base font-bold text-ink">{league.name}</span>
-              <span className="text-xs font-bold uppercase text-ink/50">{league.clubs.length} clubs</span>
+              <span className="flex min-w-0 flex-1 items-center gap-3">
+                {league.logoPath ? (
+                  <img src={league.logoPath} alt={`${league.name} logo`} className="h-10 w-20 shrink-0 object-contain object-left" />
+                ) : (
+                  <span className="h-10 w-20 shrink-0" />
+                )}
+                <span className="truncate text-base font-bold text-ink">{league.name}</span>
+              </span>
+              <span className="shrink-0 text-xs font-bold uppercase text-ink/50">{league.clubs.length} clubs</span>
             </button>
           ))}
         </div>
