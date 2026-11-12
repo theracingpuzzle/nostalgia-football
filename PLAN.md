@@ -1125,3 +1125,34 @@ the top-right of the pitch itself. `TeamSelectionScreen.tsx`:
   (order-3) and desktop (sidebar) layout blocks — it only ever renders
   once now, inside the Pitch panel's title, which itself isn't
   duplicated. Simplifies the mobile/desktop layout split slightly.
+
+## Fixed: goalkeepers getting booked far more than anyone else
+
+User-reported: goalkeepers seemed to pick up yellow/red cards more often
+than outfield players. Confirmed as a real engine bug, not perception —
+card recipients were picked via `weightedPick(pool, (p) => 100 -
+p.attributes.defending)`, and a goalkeeper's `defending` attribute is a
+meaningless placeholder (0, same as all their non-goalkeeping stats in
+`realSquads2008_09.ts`'s `mk()` — GKs don't have a real "defending"
+rating, unlike outfield players who at least have a placeholder value
+meant to represent something). `100 - 0 = 100` made a keeper's card
+weight the *highest* on the pitch (vs ~30 for every outfield player with
+the current placeholder data) — backwards from reality, where keepers are
+booked far less often than outfield players. With 1 GK in an 11-man XI,
+this gave them roughly a 1-in-4 chance of being the player picked for any
+given card, instead of a fair ~1-in-11.
+
+Fixed with a dedicated `cardWeight()` in `matchSimulator.ts` that gives
+goalkeepers a low fixed weight (10) instead of running them through the
+same `100 - defending` formula as outfield players — rare, not never,
+since real keepers do occasionally pick up a card (challenges outside the
+box, time-wasting, dissent). Used for both yellow and red card selection.
+
+Added a regression test (`does not over-book goalkeepers relative to
+outfield players`) that builds a realistic XI (GK `defending: 0`, matching
+production data — the existing test helper's flat 60-for-everyone
+defaults didn't actually reproduce the bug) and checks goalkeepers make up
+well under their "fair share" of cards across 500 simulated matches.
+Verified this test fails loudly (23% of cards going to the keeper) against
+the old formula and passes against the fix, so it's a real guard, not a
+vacuous one.

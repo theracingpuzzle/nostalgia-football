@@ -151,6 +151,46 @@ describe('simulateMatch', () => {
     expect(foundARedCard).toBe(true);
     expect(totalReds).toBeLessThan(totalBookings);
   });
+
+  it('does not over-book goalkeepers relative to outfield players', () => {
+    // A goalkeeper's `defending` attribute is a meaningless placeholder —
+    // real squad data (realSquads2008_09.ts's mk()) sets it to 0 for GKs,
+    // not a real skill of theirs, while outfield players get a normal
+    // value. makeTeam()'s flat 60-for-everyone test defaults don't
+    // reproduce that gap, so this test builds its own XI matching the
+    // real data shape. Naively weighting cards by `100 - defending` made
+    // a GK's card weight the highest on the pitch instead of one of the
+    // lowest — backwards from how rarely real keepers get booked. With 1
+    // GK out of 11 players, an unbiased engine books them close to 1/11
+    // (~9%) of the time; the bug made it closer to 1 in 4.
+    function makeRealisticTeam(clubId: string): TeamMatchInput {
+      const club: Club = { id: clubId, name: clubId, shortName: clubId.slice(0, 3).toUpperCase(), colors: { primary: '#000', secondary: '#fff' }, reputation: 60, players: [] };
+      const positions: Position[] = ['GK', 'DEF', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'MID', 'FWD', 'FWD'];
+      const selectedXI = positions.map((position, i) =>
+        makePlayer(
+          `${clubId}-${position}-${i}`,
+          position,
+          position === 'GK' ? { pace: 0, shooting: 0, passing: 0, defending: 0, physical: 0, goalkeeping: 70 } : { defending: 70 },
+        ),
+      );
+      return { club, formation: FORMATION_442, selectedXI };
+    }
+
+    const home = makeRealisticTeam('home');
+    const away = makeRealisticTeam('away');
+    let gkCards = 0;
+    let totalCards = 0;
+    for (let seed = 0; seed < 500; seed++) {
+      const result = simulateMatch({ fixtureId: 'f1', home, away, seed });
+      for (const event of result.events) {
+        if (event.type !== 'yellow-card' && event.type !== 'red-card') continue;
+        totalCards += 1;
+        if (event.playerId?.endsWith('-GK-0')) gkCards += 1;
+      }
+    }
+    expect(totalCards).toBeGreaterThan(50); // enough of a sample to trust the ratio
+    expect(gkCards / totalCards).toBeLessThan(0.07);
+  });
 });
 
 describe('createMatchSimulation', () => {

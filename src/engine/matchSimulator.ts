@@ -53,6 +53,22 @@ function outfield(players: Player[]): Player[] {
   return nonGoalkeepers.length > 0 ? nonGoalkeepers : players;
 }
 
+/**
+ * Card-booking weight. `defending` is a meaningless placeholder (0) for
+ * goalkeepers — it's not a real skill of theirs, unlike outfield players
+ * where it's a genuine (if also placeholder-value) attribute — so
+ * `100 - defending` would make a GK's weight the highest on the pitch
+ * (100, vs ~30 for everyone else with the current placeholder data),
+ * when real goalkeepers are booked far *less* often than outfield
+ * players, not more. Gives them a low fixed weight instead — rare, not
+ * never, since keepers do occasionally pick up cards (rash challenges,
+ * time-wasting, dissent).
+ */
+function cardWeight(player: Player): number {
+  if (player.position === 'GK') return 10;
+  return 100 - player.attributes.defending;
+}
+
 function addTally(tallies: Map<string, Scorer>, playerId: string, playerName: string, minute: number): void {
   const existing = tallies.get(playerId);
   if (existing) existing.minutes.push(minute);
@@ -149,14 +165,14 @@ export function createMatchSimulation({ fixtureId, home, away, seed, applyHomeAd
       if (random() < YELLOW_CARD_RATE_PER_MINUTE) {
         const side = random() < 0.5 ? 'home' : 'away';
         const pool = side === 'home' ? homeXI : awayXI;
-        const player = weightedPick(random, pool, (p) => 100 - p.attributes.defending);
+        const player = weightedPick(random, pool, cardWeight);
         events.push({ minute, type: 'yellow-card', side, playerId: player.id, playerName: player.name, description: `${player.name} is booked` });
         addTally(side === 'home' ? homeBookingMinutes : awayBookingMinutes, player.id, player.name, minute);
       }
       if (random() < RED_CARD_RATE_PER_MINUTE) {
         const side = random() < 0.5 ? 'home' : 'away';
         const pool = side === 'home' ? homeXI : awayXI;
-        const player = weightedPick(random, pool, (p) => 100 - p.attributes.defending);
+        const player = weightedPick(random, pool, cardWeight);
         events.push({ minute, type: 'red-card', side, playerId: player.id, playerName: player.name, description: `${player.name} is sent off!` });
         addTally(side === 'home' ? homeRedCardMinutes : awayRedCardMinutes, player.id, player.name, minute);
       }
