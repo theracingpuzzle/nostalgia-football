@@ -1177,3 +1177,12 @@ full-lineup substitution list with a simpler flow.
   ("OUT: X · IN: Y") so you can see what's already been done this match.
 - `handleSubstitute` in `MatchAnimationScreen` now also records each swap
   into a `subsMade` list for that display.
+
+## Live match scorers: one line per scorer, matching Full Time
+
+User request: during the live match, each scorer should be on their own
+line (same player scoring twice still shares one line, just with both
+minutes) rather than every scorer on the side joined into one `·`-
+separated line. The Full Time screen already worked this way; the live
+scoreboard in `MatchAnimationScreen.tsx` didn't — now it does, using the
+exact same per-scorer `<div>` pattern.

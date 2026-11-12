@@ -337,8 +337,12 @@ export function MatchAnimationScreen({
           </div>
         </div>
         <div className="flex justify-center gap-10 px-1 pb-1 text-xs text-ink/70">
-          <div>{liveHomeScorers.map((s) => `${s.playerName} ${s.minutes.join(', ')}'`).join(' · ') || '—'}</div>
-          <div>{liveAwayScorers.map((s) => `${s.playerName} ${s.minutes.join(', ')}'`).join(' · ') || '—'}</div>
+          <div className="flex flex-col items-end gap-0.5">
+            {liveHomeScorers.length > 0 ? liveHomeScorers.map((s) => <div key={s.playerId}>{`${s.playerName} ${s.minutes.join(', ')}'`}</div>) : <div>—</div>}
+          </div>
+          <div className="flex flex-col items-start gap-0.5">
+            {liveAwayScorers.length > 0 ? liveAwayScorers.map((s) => <div key={s.playerId}>{`${s.playerName} ${s.minutes.join(', ')}'`}</div>) : <div>—</div>}
+          </div>
         </div>
         {(liveHomeCards.length > 0 || liveAwayCards.length > 0) && (
           <div className="flex justify-center gap-10 px-1 pb-1 text-[11px] text-ink/70">
