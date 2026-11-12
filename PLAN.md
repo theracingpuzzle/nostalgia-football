@@ -1156,3 +1156,24 @@ well under their "fair share" of cards across 500 simulated matches.
 Verified this test fails loudly (23% of cards going to the keeper) against
 the old formula and passes against the fix, so it's a real guard, not a
 vacuous one.
+
+## Half time: a coach comment, and a compact substitution picker
+
+User request: at half time, lead with a coach comment, and replace the
+full-lineup substitution list with a simpler flow.
+
+- **Coach comment** — `buildHalfTimeComment` in `MatchAnimationScreen.tsx`
+  picks a short team-talk line from the scoreline (winning/losing/level,
+  and by how much) plus discipline so far (a red card, or 2+ yellows
+  prompts an extra line about it). A new addition, same honesty framing
+  as the rest of the project — not a tactical AI, just flavor text.
+- **Substitution picker** — previously listed all 11 starting players,
+  each with its own "Bring on..." dropdown (mostly irrelevant to any one
+  substitution). Replaced with two selects: "Bring off..." (the current
+  on-pitch XI, excluding anyone sent off) then "Bring on..." (bench,
+  filtered to the outgoing player's position, enabled only once an
+  outgoing player is picked) — one decision at a time, closer to how a
+  real substitution actually gets made. Confirmed subs are listed below
+  ("OUT: X · IN: Y") so you can see what's already been done this match.
+- `handleSubstitute` in `MatchAnimationScreen` now also records each swap
+  into a `subsMade` list for that display.

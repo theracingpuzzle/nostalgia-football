@@ -58,6 +58,32 @@ interface LiveCard {
   cardType: 'yellow' | 'red';
 }
 
+/**
+ * A short half-time team-talk line reacting to the scoreline and
+ * discipline so far — a new addition (there's no indication the original
+ * had anything like a team talk), not a tactical AI, just flavor text
+ * picked from the current score/cards.
+ */
+function buildHalfTimeComment(managedGoals: number, opponentGoals: number, redCards: number, yellowCards: number): string {
+  let comment: string;
+  if (managedGoals > opponentGoals) {
+    comment =
+      managedGoals - opponentGoals >= 2
+        ? 'Cracking half — keep playing exactly like that and this one’s job done.'
+        : 'We’re ahead — stay switched on, one slip and it’s back to square one.';
+  } else if (managedGoals < opponentGoals) {
+    comment =
+      opponentGoals - managedGoals >= 2
+        ? 'We’re chasing the game here. Need to see some changes if we’re getting anything from this.'
+        : 'We’re behind, but it’s only one goal — a bit more urgency and we’ll get back into it.';
+  } else {
+    comment = managedGoals === 0 ? 'Goalless so far. We need more of a cutting edge up front.' : 'Honours even — let’s find a way to nick it in the second half.';
+  }
+  if (redCards > 0) comment += ' And we need to dig in — we’re down to 10 men.';
+  else if (yellowCards >= 2) comment += ' Easy on the tackling out there — we’re already on thin ice with the ref.';
+  return comment;
+}
+
 function randomJitter(current: number, min: number, max: number, maxDelta: number): number {
   const next = current + (Math.random() * 2 - 1) * maxDelta;
   return Math.max(min, Math.min(max, next));
@@ -146,6 +172,7 @@ export function MatchAnimationScreen({
   const [managedXI, setManagedXI] = useState<Player[]>(managedInput.selectedXI);
   const [bench, setBench] = useState<Player[]>(managedBench);
   const [subsUsed, setSubsUsed] = useState(0);
+  const [subsMade, setSubsMade] = useState<{ outName: string; inName: string }[]>([]);
 
   const simRef = useRef<MatchSimulationHandle | null>(null);
   const firedRef = useRef(new Set<number>());
@@ -273,10 +300,12 @@ export function MatchAnimationScreen({
 
   function handleSubstitute(outPlayerId: string, inPlayer: Player) {
     if (subsUsed >= MAX_SUBSTITUTIONS) return;
+    const outPlayer = managedXI.find((p) => p.id === outPlayerId);
     simRef.current?.substitute(managedSide, outPlayerId, inPlayer);
     setManagedXI((prev) => prev.map((p) => (p.id === outPlayerId ? inPlayer : p)));
     setBench((prev) => prev.filter((p) => p.id !== inPlayer.id));
     setSubsUsed((n) => n + 1);
+    if (outPlayer) setSubsMade((prev) => [...prev, { outName: outPlayer.name, inName: inPlayer.name }]);
   }
 
   function skipToFullTime() {
@@ -341,10 +370,17 @@ export function MatchAnimationScreen({
 
       {phase === 'half-time' ? (
         <HalfTimePanel
+          comment={buildHalfTimeComment(
+            managedSide === 'home' ? liveHomeGoals : liveAwayGoals,
+            managedSide === 'home' ? liveAwayGoals : liveHomeGoals,
+            managedCards.filter((c) => c.cardType === 'red').length,
+            managedCards.filter((c) => c.cardType === 'yellow').length,
+          )}
           managedXI={managedXI}
           bench={bench}
           sentOffIds={sentOffIds}
           subsUsed={subsUsed}
+          subsMade={subsMade}
           onSubstitute={handleSubstitute}
           onContinue={() => setPhase('second-half')}
           onSkip={skipToFullTime}
@@ -416,68 +452,102 @@ export function MatchAnimationScreen({
   );
 }
 
+/**
+ * Replaces an earlier design that listed the entire starting XI with a
+ * dropdown next to every single row (11 rows, most of them irrelevant to
+ * any one substitution) — this instead asks "who's coming off" and "who's
+ * coming on" one decision at a time, which is both closer to how a real
+ * substitution actually gets made and a lot less to scan at a glance.
+ */
 function HalfTimePanel({
+  comment,
   managedXI,
   bench,
   sentOffIds,
   subsUsed,
+  subsMade,
   onSubstitute,
   onContinue,
   onSkip,
 }: {
+  comment: string;
   managedXI: Player[];
   bench: Player[];
   sentOffIds: Set<string>;
   subsUsed: number;
+  subsMade: { outName: string; inName: string }[];
   onSubstitute: (outPlayerId: string, inPlayer: Player) => void;
   onContinue: () => void;
   onSkip: () => void;
 }) {
   const subsLeft = MAX_SUBSTITUTIONS - subsUsed;
+  const [outPlayerId, setOutPlayerId] = useState('');
+
+  const eligibleToComeOff = managedXI.filter((p) => !sentOffIds.has(p.id));
+  const outPlayer = eligibleToComeOff.find((p) => p.id === outPlayerId);
+  const inOptions = outPlayer ? bench.filter((p) => p.position === outPlayer.position) : [];
+
+  function confirmSub(inPlayerId: string) {
+    const inPlayer = inOptions.find((p) => p.id === inPlayerId);
+    if (!outPlayer || !inPlayer) return;
+    onSubstitute(outPlayer.id, inPlayer);
+    setOutPlayerId('');
+  }
 
   return (
     <Panel title="Half Time" className="mb-2">
+      <p className="mb-3 rounded-sm border-2 border-ink/20 bg-white/60 px-2.5 py-2 text-sm italic text-ink">🗣️ “{comment}”</p>
+
       <p className="mb-2 text-xs text-ink/70">
         Substitutions remaining: <strong>{subsLeft}</strong>
         {subsLeft === 0 && ' — no changes left'}
       </p>
-      <ul className="flex flex-col gap-1">
-        {managedXI.map((player) => {
-          const sentOff = sentOffIds.has(player.id);
-          const options = bench.filter((p) => p.position === player.position);
-          return (
-            <li key={player.id} className="flex items-center justify-between gap-2 rounded-sm border-2 border-ink/20 bg-white/60 px-2 py-1.5 text-sm text-ink">
-              <span className={sentOff ? 'text-red-700 line-through' : ''}>
-                {player.name} <span className="text-xs uppercase text-ink/50">{player.position}</span>
-              </span>
-              {sentOff ? (
-                <span className="text-xs font-bold uppercase text-red-700">Sent off</span>
-              ) : subsLeft > 0 && options.length > 0 ? (
-                <select
-                  className="rounded-sm border-2 border-ink/30 bg-white px-1.5 py-1 text-xs text-ink"
-                  value=""
-                  onChange={(e) => {
-                    const inPlayer = options.find((p) => p.id === e.target.value);
-                    if (inPlayer) onSubstitute(player.id, inPlayer);
-                  }}
-                >
-                  <option value="" disabled>
-                    Bring on...
-                  </option>
-                  {options.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="text-xs text-ink/40">—</span>
-              )}
+
+      {subsLeft > 0 && eligibleToComeOff.length > 0 && (
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <select
+            className="flex-1 rounded-sm border-2 border-ink/30 bg-white px-2 py-1.5 text-sm text-ink"
+            value={outPlayerId}
+            onChange={(e) => setOutPlayerId(e.target.value)}
+          >
+            <option value="" disabled>
+              Bring off...
+            </option>
+            {eligibleToComeOff.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.position})
+              </option>
+            ))}
+          </select>
+          <select
+            className="flex-1 rounded-sm border-2 border-ink/30 bg-white px-2 py-1.5 text-sm text-ink disabled:opacity-50"
+            value=""
+            disabled={!outPlayer}
+            onChange={(e) => confirmSub(e.target.value)}
+          >
+            <option value="" disabled>
+              {outPlayer ? (inOptions.length > 0 ? 'Bring on...' : 'No fit replacement') : 'Pick who comes off first'}
+            </option>
+            {inOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {subsMade.length > 0 && (
+        <ul className="mb-3 flex flex-col gap-1 text-xs text-ink/80">
+          {subsMade.map((s, i) => (
+            <li key={i} className="rounded-sm bg-ink/5 px-2 py-1">
+              <span className="text-red-700">OUT:</span> {s.outName} · <span className="text-green-700">IN:</span> {s.inName}
             </li>
-          );
-        })}
-      </ul>
-      <div className="mt-3 flex justify-center gap-2">
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-1 flex justify-center gap-2">
         <Button onClick={onContinue}>Continue to Second Half</Button>
         <Button variant="secondary" onClick={onSkip}>
           Skip to Full Time
