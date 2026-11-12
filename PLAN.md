@@ -1091,10 +1091,17 @@ the Etihad):
   "private, non-distributed build" basis already established for the
   real (trademarked) club crests — confirmed with the user before
   fetching from a different site than usual.
-- **La Liga**: the "Liga BBVA" wordmark — BBVA sponsored La Liga from
-  2008/09 through 2015/16, so this (not the current La Liga logo) is the
-  era-correct one. `public/leagues/la-liga.svg`, sourced from Wikimedia
-  Commons (`Liga_BBVA.svg`), same as the club crests.
+- **La Liga**: the user first asked for era accuracy here too, and
+  "Liga BBVA" (BBVA sponsored La Liga 2008/09-2015/16) went in first —
+  but the user then pasted the specific logo they actually meant: the
+  modern "LaLiga" pinwheel-ball logo (introduced 2016), not an era match
+  at all. Swapped in by their explicit request; the two league logos are
+  **not** on the same era-accuracy footing as a result (flagged in the
+  `logoPath` doc comment in `leagues.ts`). `public/leagues/la-liga.png`,
+  sourced from logowik.com (same "private, non-distributed build" basis
+  as the Premier League one — this exact logo isn't on Wikimedia Commons
+  either; what's there under "LaLiga.svg" and similar titles has been
+  deleted repeatedly per Commons' deletion log).
 - `LeagueDefinition` gained an optional `logoPath` (same relative-path,
   no-leading-slash convention as `ClubListing.crestPath`, so it also
   works under GitHub Pages' sub-path). `LeagueSelectScreen.tsx` renders
