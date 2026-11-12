@@ -1186,3 +1186,34 @@ minutes) rather than every scorer on the side joined into one `·`-
 separated line. The Full Time screen already worked this way; the live
 scoreboard in `MatchAnimationScreen.tsx` didn't — now it does, using the
 exact same per-scorer `<div>` pattern.
+
+## Real La Liga club crests
+
+User request: get real club crests for La Liga, matching what the
+Premier League clubs already have.
+
+Same reasoning and same caveat as the Premier League crests above —
+private, non-distributed build, real trademarked logos stay local
+(`public/crests/` gitignored) and only the `docs/` build output (what
+GitHub Pages actually serves) carries them. These are each club's
+**current** badge from Wikipedia, not necessarily what they wore in
+2008/09 (several, like Osasuna and Deportivo, have had redesigns since).
+
+Found each club's current crest file by fetching the raw Wikipedia
+article wikitext (`prop=revisions&rvprop=content`) and reading the
+`{{Infobox football club}}`'s `| image = ` parameter directly — more
+reliable than the `pageimages` or `images` API props, which either
+exclude non-free crest images entirely or surface old/historical crest
+files instead of the current one. Resolved each filename to a download
+URL via `prop=imageinfo&iiprop=url` and fetched all 20 into
+`public/crests/ll-<id>.{svg,png}`, wired up via `crestPath` on each
+`ClubListing` in `laLiga0809.ts`.
+
+Three clubs' Wikipedia SVGs (Real Betis, Sevilla, Getafe) turned out to
+be 1-6MB — either embedded raster data or extremely complex path data,
+not just a simple crest — which would have been a real page-weight
+problem given how many crests render on screen at once (club lists,
+league table, fixtures). Used Wikipedia's own thumbnail renderer
+(`Special:FilePath/<file>?width=300`) to get a clean ~20-70KB PNG for
+those three instead; the other 17 clubs' native SVGs were already small
+enough to use as-is.
