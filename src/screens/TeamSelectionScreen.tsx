@@ -144,10 +144,13 @@ interface TeamSelectionScreenProps {
  * panel benches them. Injured players can't be dragged onto the pitch.
  * GK and outfield slots reject each other — everything else is free-form.
  *
- * Layout is a sidebar (formation/coach/continue) + main area (pitch+subs,
+ * Layout is a sidebar (formation/coach advice) + main area (pitch+subs,
  * squad below) rather than one long vertical stack, specifically so it fits
  * in one screen without scrolling — a usability call, not a claim about the
- * original's actual layout (still unconfirmed, see PLAN.md).
+ * original's actual layout (still unconfirmed, see PLAN.md). Coach's Help
+ * and Continue both live right on the pitch itself (Coach's Help overlaid
+ * top-right of the field, Continue in the Pitch panel's title) rather than
+ * in the sidebar, so both stay reachable without scrolling on mobile.
  *
  * Starts with every slot empty, confirmed from a real screenshot of the
  * original's Select Your Team/Formation screen. Changing formation after
@@ -380,26 +383,26 @@ export function TeamSelectionScreen({
                 </li>
               </ul>
             ) : (
-              <p className="text-xs text-ink/70">Tap Coach's Help (above the pitch) for a squad summary and to fill any empty slots.</p>
+              <p className="text-xs text-ink/70">Tap Coach's Help (top-right of the pitch) for a squad summary and to fill any empty slots.</p>
             )}
     </Panel>
   );
 
   const coachHelpButton = (
-    <Button variant="secondary" className="px-2 py-1 text-xs" onClick={handleCoachHelp}>
+    <Button variant="secondary" className="px-2 py-1 text-xs shadow-[1px_1px_0_rgba(0,0,0,0.4)]" onClick={handleCoachHelp}>
       Coach's Help
     </Button>
   );
 
   const continueButton = onContinue ? (
-    <Button className="w-full" style={{ backgroundColor: primaryColor, borderColor: secondaryColor, color: contrastText }} onClick={onContinue}>
+    <Button className="px-3 py-1 text-xs" style={{ backgroundColor: primaryColor, borderColor: secondaryColor, color: contrastText }} onClick={onContinue}>
       Continue
     </Button>
   ) : null;
 
   const pitchAndSubs = (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_210px]">
-      <Panel title={`Pitch (${formation.name})`} accentColor={primaryColor} titleAction={coachHelpButton}>
+      <Panel title={`Pitch (${formation.name})`} accentColor={primaryColor} titleAction={continueButton}>
               {/*
                 Portrait (down the page) on mobile for usability, landscape
                 (left-to-right, matching the real reference screenshot) from
@@ -432,6 +435,8 @@ export function TeamSelectionScreen({
 
                 {/* Center circle — same shape either orientation */}
                 <div className="pointer-events-none absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/60" />
+
+                <div className="absolute right-1.5 top-1.5 z-10">{coachHelpButton}</div>
 
                 <div className="relative flex h-full flex-col items-stretch justify-between gap-1 px-3 py-3 md:flex-row md:px-5">
                   {COLUMN_ORDER.map((position) => {
@@ -535,33 +540,30 @@ export function TeamSelectionScreen({
 
       {/*
         Mobile (below lg): pitch comes right after the formation picker,
-        then Coach's Help and Continue right after the pitch — so both sit
-        near the actual football view instead of below the full squad list,
-        and Continue doesn't need a long scroll to reach. The squad list
-        (long, scrollable) comes last. Desktop keeps the original sidebar +
-        main-area layout, driven by `order`/`lg:order` (and `lg:col-start-2`
-        for the squad list, which must land in the main column below the
-        pitch rather than auto-placing into the sidebar column) rather than
-        duplicating the expensive parts (pitch, substitutes, squad) — only
-        the small, cheap panels (formation/coach/continue) are rendered
-        twice, once per layout.
+        with Coach's Help (overlaid top-right of the pitch itself) and
+        Continue (in the Pitch panel's title, next to the formation name)
+        both living right on the football view rather than below the full
+        squad list — Continue in particular doesn't need a long scroll to
+        reach. The squad list (long, scrollable) comes last. Desktop keeps
+        the original sidebar + main-area layout, driven by `order`/`lg:order`
+        (and `lg:col-start-2` for the squad list, which must land in the
+        main column below the pitch rather than auto-placing into the
+        sidebar column) rather than duplicating the expensive parts (pitch,
+        substitutes, squad) — only the small, cheap panels (formation/coach
+        advice) are rendered twice, once per layout.
       */}
       <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[220px_1fr] lg:items-start">
         <div className="order-1 lg:hidden">{formationPanel}</div>
 
         <div className="order-2 lg:order-2">{pitchAndSubs}</div>
 
-        <div className="order-3 flex flex-col gap-3 lg:hidden">
-          {coachPanel}
-          {continueButton}
-        </div>
+        <div className="order-3 lg:hidden">{coachPanel}</div>
 
         <div className="order-4 lg:order-3 lg:col-start-2">{squadPanel}</div>
 
         <div className="hidden lg:order-1 lg:flex lg:flex-col lg:gap-3">
           {formationPanel}
           {coachPanel}
-          {continueButton}
         </div>
       </div>
     </div>

@@ -1109,3 +1109,19 @@ the Etihad):
   very different native aspect ratios (a roughly-square badge vs. a wide
   wordmark) — falls back to just the league name if a future league
   doesn't have one sourced yet.
+
+## Swap Continue and Coach's Help positions on Team Selection
+
+User request: Continue moves to where Coach's Help was (the Pitch
+panel's title bar, next to the formation name), and Coach's Help moves to
+the top-right of the pitch itself. `TeamSelectionScreen.tsx`:
+
+- `Panel`'s `titleAction` for the Pitch panel is now `continueButton`
+  instead of `coachHelpButton`.
+- `coachHelpButton` is now absolutely positioned (`absolute right-1.5
+  top-1.5 z-10`) inside the green pitch div itself, overlaid on the field
+  rather than living in a panel header.
+- `continueButton` no longer needs duplicating between the mobile
+  (order-3) and desktop (sidebar) layout blocks — it only ever renders
+  once now, inside the Pitch panel's title, which itself isn't
+  duplicated. Simplifies the mobile/desktop layout split slightly.
