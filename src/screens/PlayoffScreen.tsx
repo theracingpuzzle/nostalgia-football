@@ -18,7 +18,7 @@ function clubName(clubId: string): string {
 
 function LegScore({ leg, homeClubId, awayClubId, wentToExtraTime }: { leg: Fixture; homeClubId: string; awayClubId: string; wentToExtraTime?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-2 text-sm">
+    <div className="flex items-center justify-between gap-2 text-sm text-ink">
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         <Crest clubId={homeClubId} size={18} />
         <span className="truncate">{clubName(homeClubId)}</span>

@@ -1489,3 +1489,33 @@ squad files (none found after the Jonny Evans fix), full `tsc`/97-test
 suite/`eslint` pass (data-only change, so the count itself didn't move),
 and live confirmation that Villarreal's Team Selection screen now lists
 all 17 players including the newly added ones, with no console errors.
+
+## Fixed: playoff semi-final screen's team names unreadable
+
+Bug report: on the Championship promotion playoff's semi-final screen,
+the club names were unreadable against the background.
+
+Root cause: `PlayoffScreen.tsx`'s outer wrapper sets `text-white` (it's
+rendered directly on the green overlay background, same as every other
+full-screen overlay), but each `LegScore`'s club-name/score text had no
+explicit color of its own — so it inherited that white, even though
+`LegScore` is actually rendered *inside* a `Panel`, whose content area
+sits on a light cream background (`bg-panel`, `#f4efe0`). White text on
+a near-white background is effectively invisible. Every other
+Panel-rendered screen in this app (`MatchResultScreen`, etc.) already
+explicitly sets `text-ink` on its own content for exactly this reason —
+`LegScore` was just missing it.
+
+Fix: added `text-ink` to `LegScore`'s wrapping element (the club names
+and score already inherit it; the one bit that was already-correct,
+`AET`/aggregate line/penalty line/winner line, used `text-ink/XX`
+explicitly and was never affected).
+
+Verified live: since reaching this screen normally needs a full
+46-matchday Championship season, injected a `CareerSaveData` directly
+into `localStorage` with a pre-built `managedPlayoff` (semi-final 1 leg
+1 played, leg 2 still to play) to land on the screen immediately, then
+checked computed styles directly rather than relying on a screenshot —
+confirmed club-name text now renders in `rgb(23, 37, 29)` (the `ink`
+color) against the panel's `rgb(244, 239, 224)` background, versus
+white-on-cream before the fix. No console errors.
