@@ -1217,3 +1217,42 @@ league table, fixtures). Used Wikipedia's own thumbnail renderer
 (`Special:FilePath/<file>?width=300`) to get a clean ~20-70KB PNG for
 those three instead; the other 17 clubs' native SVGs were already small
 enough to use as-is.
+
+## Championship (English second tier), with real crests and league logo
+
+User request: add the Championship, complete with club crests and a
+league logo, matching the Premier League and La Liga.
+
+New data files, same shape as the other two leagues: `championship0809.ts`
+(24 `ClubListing`s, ids prefixed `ch-`) and
+`realSquadsChampionship0809.ts` (full squads, merged into
+`SQUADS_BY_CLUB_ID` in `clubSquads.ts`), registered in `leagues.ts` as a
+third `LeagueDefinition`. This is the first league with other than 20
+clubs — 24 clubs means 46 matchdays, not 38 — which is exactly what the
+`buildSeasonMonths(totalMatchdays)` generalization (done as part of the
+original La Liga work, see above) exists for. No other code changed:
+fixtures, the table, transfers, stats, and Team of the Month all picked
+up the new league with zero changes, confirmed live (46-matchday fixture
+list generated correctly, transfer-window rumours/deals only ever
+involved other Championship clubs, Team of the Month fired on schedule).
+
+Same caveat as the other two leagues' club lists: reconstructed from
+memory. Solid facts — champions Wolverhampton Wanderers and runners-up
+Birmingham City promoted automatically, Burnley won the playoff final
+against Sheffield United, Norwich City/Southampton (docked 10 points
+that season for entering administration)/Charlton Athletic relegated —
+exact mid-table order isn't guaranteed. Squad depth confidence is lower
+for the less prominent clubs than for the ones that were promoted or
+relegated that season.
+
+Crests sourced the same way as La Liga's (Wikipedia infobox wikitext →
+`| image = ` → `imageinfo` → download), all 24 landing as usable SVGs
+with no outliers needing the thumbnail-replacement treatment this time.
+**Also sourced a league logo**, same way (`LeagueDefinition.logoPath`
+already existed from the Premier League/La Liga work, rendered on the
+League Select screen — this just adds the Championship's). Found via the
+EFL Championship Wikipedia infobox: the current EFL Championship logo,
+rather than the period "Coca-Cola Championship" sponsor branding that
+was actually in use in 2008/09 — same kind of era-accuracy tradeoff
+already flagged for La Liga's logo, noted on `LeagueDefinition.logoPath`
+itself.

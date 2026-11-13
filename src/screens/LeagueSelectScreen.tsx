@@ -3,12 +3,11 @@ import { Panel } from '../components/ui/Panel';
 import { LEAGUES } from '../data/leagues';
 
 /**
- * Picking a league before a club — the first league added beyond the
- * Premier League is La Liga (see PLAN.md for the multi-league expansion
- * and what's still Premier-League-only). Shows each league's real
- * 2008/09 title-sponsor logo (Barclays Premier League / Liga BBVA) where
- * one's been sourced — see PLAN.md for where these came from and the
- * same "private, non-distributed build" caveat as the club crests.
+ * Picking a league before a club (see PLAN.md for the multi-league
+ * expansion and what's still Premier-League-only). Shows each league's
+ * real logo where one's been sourced — see PLAN.md for where these came
+ * from, including the era-accuracy caveats, and the same "private,
+ * non-distributed build" caveat as the club crests.
  */
 export function LeagueSelectScreen({ onSelectLeague }: { onSelectLeague: (leagueId: string) => void }) {
   useEffect(() => {
