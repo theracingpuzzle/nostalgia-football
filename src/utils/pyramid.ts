@@ -1,33 +1,43 @@
 import { getLeagueZone } from './leagueZones';
+import type { LeagueDefinition } from '../data/leagues';
 import type { LeagueTableRow } from '../engine/types';
 
 /**
- * Real promotion/relegation between the only two English divisions
- * modeled here: the Premier League's bottom 3 (getLeagueZone's
- * 'relegation' zone for tier:'top') swap with the Championship's top 2
- * (getLeagueZone's 'promotion' zone for tier:'second') plus the
- * promotion playoff's winner. La Liga has no pyramid relationship to
- * either and never appears here — it only ever runs in parallel for
- * flavor (see utils/backgroundLeague.ts).
+ * The real English football pyramid chain, top to bottom, used to drive
+ * promotion/relegation between adjacent divisions. La Liga is deliberately
+ * NOT in this list — it shares `tier: 'top'` with the Premier League but
+ * has no real connection to this chain, so membership here (not `tier`)
+ * is what decides "does this league have a division above/below it".
+ */
+export const ENGLISH_PYRAMID = ['premier-league', 'championship', 'league-one', 'league-two'];
+
+/**
+ * Generalized promotion/relegation between one adjacent pair of divisions
+ * in the pyramid. Works for all three real boundary shapes — Premier
+ * League/Championship and Championship/League One are both 3-up-3-down
+ * with a 3rd-6th playoff; League One/League Two promotes 3 up via
+ * automatic+playoff but relegates 4, and League Two itself promotes 3
+ * automatically plus a 4th-7th playoff winner (see leagueZones.ts) — by
+ * deferring the exact cutoffs to `getLeagueZone` for each side's own tier
+ * rather than hardcoding a single shape here.
  */
 export function computePyramidTransition(
-  premierLeagueClubIds: string[],
-  championshipClubIds: string[],
-  premierLeagueTable: LeagueTableRow[],
-  championshipRegularSeasonTable: LeagueTableRow[],
-  championshipPlayoffWinnerClubId: string,
-): { nextPremierLeagueClubIds: string[]; nextChampionshipClubIds: string[]; relegatedFromPremierLeague: string[]; promotedFromChampionship: string[] } {
-  const relegatedFromPremierLeague = premierLeagueTable
-    .filter((_row, i) => getLeagueZone(i + 1, premierLeagueTable.length, 'top') === 'relegation')
+  upperClubIds: string[],
+  lowerClubIds: string[],
+  upperTable: LeagueTableRow[],
+  lowerRegularSeasonTable: LeagueTableRow[],
+  lowerPlayoffWinnerClubId: string,
+  upperTier: LeagueDefinition['tier'],
+  lowerTier: LeagueDefinition['tier'],
+): { nextUpperClubIds: string[]; nextLowerClubIds: string[]; relegatedFromUpper: string[]; promotedFromLower: string[] } {
+  const relegatedFromUpper = upperTable
+    .filter((_row, i) => getLeagueZone(i + 1, upperTable.length, upperTier) === 'relegation')
     .map((row) => row.clubId);
-
-  const autoPromoted = championshipRegularSeasonTable
-    .filter((_row, i) => getLeagueZone(i + 1, championshipRegularSeasonTable.length, 'second') === 'promotion')
+  const autoPromoted = lowerRegularSeasonTable
+    .filter((_row, i) => getLeagueZone(i + 1, lowerRegularSeasonTable.length, lowerTier) === 'promotion')
     .map((row) => row.clubId);
-  const promotedFromChampionship = [...autoPromoted, championshipPlayoffWinnerClubId];
-
-  const nextPremierLeagueClubIds = [...premierLeagueClubIds.filter((id) => !relegatedFromPremierLeague.includes(id)), ...promotedFromChampionship];
-  const nextChampionshipClubIds = [...championshipClubIds.filter((id) => !promotedFromChampionship.includes(id)), ...relegatedFromPremierLeague];
-
-  return { nextPremierLeagueClubIds, nextChampionshipClubIds, relegatedFromPremierLeague, promotedFromChampionship };
+  const promotedFromLower = [...autoPromoted, lowerPlayoffWinnerClubId];
+  const nextUpperClubIds = [...upperClubIds.filter((id) => !relegatedFromUpper.includes(id)), ...promotedFromLower];
+  const nextLowerClubIds = [...lowerClubIds.filter((id) => !promotedFromLower.includes(id)), ...relegatedFromUpper];
+  return { nextUpperClubIds, nextLowerClubIds, relegatedFromUpper, promotedFromLower };
 }

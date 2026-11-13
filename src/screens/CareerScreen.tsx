@@ -16,6 +16,7 @@ import {
   generateFixtures,
   getAggregateOffsetForFixture,
   managedClubStillInPlayoff,
+  playoffSeedStartForTier,
   resolveManagedDecisiveFixture,
   simulateMatchday,
   type PlayoffState,
@@ -29,7 +30,8 @@ import {
   isBackgroundLeagueSeasonComplete,
   type BackgroundLeagueState,
 } from '../utils/backgroundLeague';
-import { computePyramidTransition } from '../utils/pyramid';
+import { getLeagueZone } from '../utils/leagueZones';
+import { computePyramidTransition, ENGLISH_PYRAMID } from '../utils/pyramid';
 import { FixturesScreen } from './FixturesScreen';
 import { LeagueTableScreen } from './LeagueTableScreen';
 import { MatchAnimationScreen } from './MatchAnimationScreen';
@@ -522,42 +524,45 @@ export function CareerScreen({
     : null;
   const leaguePosition = table.findIndex((r) => r.clubId === club.id) + 1;
   const regularSeasonComplete = fixtures.length > 0 && fixtures.every((f) => f.played);
-  // The Championship isn't actually done until its promotion playoff is
-  // resolved too — every top-tier league finishes the moment its regular
+  // Any non-top-tier league isn't actually done until its promotion playoff
+  // is resolved too — a top-tier league finishes the moment its regular
   // season does, same as before this feature.
-  const fullSeasonComplete = regularSeasonComplete && (league.tier !== 'second' || managedPlayoff?.championClubId != null);
+  const fullSeasonComplete = regularSeasonComplete && (league.tier === 'top' || managedPlayoff?.championClubId != null);
 
-  // The real promotion/relegation result for SeasonSummaryScreen, when
-  // one applies — only the Premier League and Championship are linked by
-  // the pyramid (see utils/pyramid.ts); La Liga and the Championship's
-  // own relegation zone (no League One modeled) stay null, which the
-  // screen shows with its older "not modeled yet" wording instead.
+  // The real promotion/relegation result for SeasonSummaryScreen, when one
+  // applies. Whether THIS league's finish promotes/relegates for real (vs.
+  // the screen's older "not modeled yet" wording) depends on its position
+  // in the real pyramid chain (utils/pyramid.ts) — La Liga isn't in the
+  // chain at all, and the bottom-most chain league's relegation has
+  // nowhere real to go yet.
+  const pyramidChainIndex = ENGLISH_PYRAMID.indexOf(managedLeagueId);
+  const hasRealDivisionBelow = pyramidChainIndex !== -1 && pyramidChainIndex < ENGLISH_PYRAMID.length - 1;
   const divisionOutcome: DivisionOutcome | null = !fullSeasonComplete
     ? null
-    : managedLeagueId === 'championship' && managedPlayoff
+    : league.tier !== 'top' && managedPlayoff
       ? (() => {
-          if (leaguePosition <= 2) return 'promoted-automatic';
+          if (getLeagueZone(leaguePosition, ALL_CLUB_IDS.length, league.tier) === 'promotion') return 'promoted-automatic';
           const inSemiFinal1 = managedPlayoff.semiFinal1.higherSeedClubId === club.id || managedPlayoff.semiFinal1.lowerSeedClubId === club.id;
           const inSemiFinal2 = managedPlayoff.semiFinal2.higherSeedClubId === club.id || managedPlayoff.semiFinal2.lowerSeedClubId === club.id;
-          if (!inSemiFinal1 && !inSemiFinal2) return null; // finished 7th or lower — never in the playoff
+          if (!inSemiFinal1 && !inSemiFinal2) return null; // finished outside the playoff zone — never in the bracket
           if (managedPlayoff.championClubId === club.id) return 'promoted-playoff';
           const wonSemiFinal = (inSemiFinal1 && managedPlayoff.semiFinal1Winner === club.id) || (inSemiFinal2 && managedPlayoff.semiFinal2Winner === club.id);
           return wonSemiFinal ? 'lost-playoff-final' : 'lost-playoff-semifinal';
         })()
-      : managedLeagueId === 'premier-league' && leaguePosition > ALL_CLUB_IDS.length - 3
+      : hasRealDivisionBelow && getLeagueZone(leaguePosition, ALL_CLUB_IDS.length, league.tier) === 'relegation'
         ? 'relegated-real'
         : null;
 
-  // Seeds the real Championship promotion playoff the moment the regular
-  // season ends, then — once the managed club is no longer in it
-  // (finished mid-table and was never in the bracket, or lost a semi) —
-  // resolves the rest of it in one go, same as a background league's own
-  // playoff, so the player isn't made to click through fixtures they
-  // have no stake in.
+  // Seeds the real promotion playoff (any non-top-tier league has one) the
+  // moment the regular season ends, then — once the managed club is no
+  // longer in it (finished mid-table and was never in the bracket, or lost
+  // a semi) — resolves the rest of it in one go, same as a background
+  // league's own playoff, so the player isn't made to click through
+  // fixtures they have no stake in.
   useEffect(() => {
-    if (!regularSeasonComplete || league.tier !== 'second') return;
+    if (!regularSeasonComplete || league.tier === 'top') return;
     if (!managedPlayoff) {
-      setManagedPlayoff(createPlayoffState(table, totalMatchdays + 1, Math.floor(Math.random() * 1_000_000) + 1));
+      setManagedPlayoff(createPlayoffState(table, totalMatchdays + 1, Math.floor(Math.random() * 1_000_000) + 1, playoffSeedStartForTier(league.tier)));
       return;
     }
     if (managedPlayoff.championClubId) return;
@@ -828,12 +833,16 @@ export function CareerScreen({
     }
 
     let nextLeagueClubIds = leagueClubIds;
-    if (managedLeagueId === 'premier-league' || managedLeagueId === 'championship') {
-      const pl = outcomeFor('premier-league');
-      const champ = outcomeFor('championship');
-      if (champ.playoffWinnerClubId) {
-        const { nextPremierLeagueClubIds, nextChampionshipClubIds } = computePyramidTransition(pl.clubIds, champ.clubIds, pl.table, champ.table, champ.playoffWinnerClubId);
-        nextLeagueClubIds = { ...leagueClubIds, 'premier-league': nextPremierLeagueClubIds, championship: nextChampionshipClubIds };
+    for (let i = 0; i < ENGLISH_PYRAMID.length - 1; i++) {
+      const upperLeagueId = ENGLISH_PYRAMID[i];
+      const lowerLeagueId = ENGLISH_PYRAMID[i + 1];
+      const upperTier = LEAGUES.find((l) => l.id === upperLeagueId)!.tier;
+      const lowerTier = LEAGUES.find((l) => l.id === lowerLeagueId)!.tier;
+      const upper = outcomeFor(upperLeagueId);
+      const lower = outcomeFor(lowerLeagueId);
+      if (lower.playoffWinnerClubId) {
+        const { nextUpperClubIds, nextLowerClubIds } = computePyramidTransition(upper.clubIds, lower.clubIds, upper.table, lower.table, lower.playoffWinnerClubId, upperTier, lowerTier);
+        nextLeagueClubIds = { ...nextLeagueClubIds, [upperLeagueId]: nextUpperClubIds, [lowerLeagueId]: nextLowerClubIds };
       }
     }
 
@@ -921,6 +930,8 @@ export function CareerScreen({
         leaguePosition={leaguePosition}
         totalClubs={ALL_CLUB_IDS.length}
         divisionOutcome={divisionOutcome}
+        divisionAboveName={pyramidChainIndex > 0 ? LEAGUES.find((l) => l.id === ENGLISH_PYRAMID[pyramidChainIndex - 1])?.name : undefined}
+        divisionBelowName={hasRealDivisionBelow ? LEAGUES.find((l) => l.id === ENGLISH_PYRAMID[pyramidChainIndex + 1])?.name : undefined}
         topScorers={topScorers}
         fixtures={fixtures}
         allSquads={allSquads}

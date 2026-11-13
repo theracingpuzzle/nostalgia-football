@@ -7,6 +7,7 @@ import {
   createPlayoffState,
   createRandom,
   generateFixtures,
+  playoffSeedStartForTier,
   simulateMatchday,
   type PlayoffState,
 } from '../engine';
@@ -17,9 +18,9 @@ const AI_FORMATION = FORMATIONS.find((f) => f.id === DEFAULT_FORMATION_ID) ?? FO
 /**
  * A league the player isn't currently managing, simulated fully
  * automatically alongside the managed league (see CareerScreen.tsx) — own
- * fixtures, own independent RNG stream, and (for the Championship) its
- * own promotion playoff once the regular season ends. Never holds squad
- * data of its own — every club's squad lives in the one shared
+ * fixtures, own independent RNG stream, and (for any non-top-tier league)
+ * its own promotion playoff once the regular season ends. Never holds
+ * squad data of its own — every club's squad lives in the one shared
  * `allSquads` map the managed league already uses (see data/clubSquads.ts).
  */
 export interface BackgroundLeagueState {
@@ -27,7 +28,7 @@ export interface BackgroundLeagueState {
   clubIds: string[];
   fixtures: Fixture[];
   nextSeed: number;
-  /** Only ever populated for a tier:'second' league (the Championship today). */
+  /** Only ever populated for a non-top-tier league (Championship, League One, League Two). */
   playoff: PlayoffState | null;
 }
 
@@ -35,15 +36,15 @@ export function createBackgroundLeagueState(leagueId: string, clubIds: string[],
   return { leagueId, clubIds, fixtures: generateFixtures(clubIds), nextSeed: seed, playoff: null };
 }
 
-function isSecondTier(leagueId: string): boolean {
-  return LEAGUES.find((l) => l.id === leagueId)?.tier === 'second';
+function hasPlayoff(leagueId: string): boolean {
+  return LEAGUES.find((l) => l.id === leagueId)?.tier !== 'top';
 }
 
-/** True once there's nothing left to simulate this season: the regular season, and — for a second-tier league — its promotion playoff too. */
+/** True once there's nothing left to simulate this season: the regular season, and — for a league with a playoff — its promotion playoff too. */
 export function isBackgroundLeagueSeasonComplete(state: BackgroundLeagueState): boolean {
   const regularSeasonDone = state.fixtures.length > 0 && state.fixtures.every((f) => f.played);
   if (!regularSeasonDone) return false;
-  return !isSecondTier(state.leagueId) || state.playoff?.championClubId != null;
+  return !hasPlayoff(state.leagueId) || state.playoff?.championClubId != null;
 }
 
 /**
@@ -79,11 +80,12 @@ export function advanceBackgroundLeagueMatchday(
     return { nextState: { ...state, fixtures: nextFixtures, nextSeed: nextSeed + 1 }, updatedAllSquads };
   }
 
-  // Regular season just finished and this is the Championship — seed the playoff bracket, one step at a time, same as everything else here.
+  // Regular season just finished and this league has a playoff — seed the bracket, one step at a time, same as everything else here.
   if (!state.playoff) {
     const table = computeLeagueTable(state.clubIds, state.fixtures);
     const firstPlayoffMatchday = Math.max(...state.fixtures.map((f) => f.matchday)) + 1;
-    return { nextState: { ...state, playoff: createPlayoffState(table, firstPlayoffMatchday, state.nextSeed) }, updatedAllSquads: allSquads };
+    const tier = LEAGUES.find((l) => l.id === state.leagueId)?.tier ?? 'second';
+    return { nextState: { ...state, playoff: createPlayoffState(table, firstPlayoffMatchday, state.nextSeed, playoffSeedStartForTier(tier)) }, updatedAllSquads: allSquads };
   }
   const { nextPlayoff } = advancePlayoff(state.playoff, allSquads, (id) => ALL_CLUBS.find((c) => c.id === id), AI_FORMATION);
   return { nextState: { ...state, playoff: nextPlayoff }, updatedAllSquads: allSquads };

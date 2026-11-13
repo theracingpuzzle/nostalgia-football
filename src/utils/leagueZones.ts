@@ -3,19 +3,30 @@ import type { LeagueDefinition } from '../data/leagues';
 /**
  * End-of-season table zones. A top-flight division (Premier League, La
  * Liga) sends its top finishers into Europe and relegates its bottom 3 —
- * standard, not a guess. A second-tier division (the Championship)
- * instead promotes its top 2 automatically and sends 3rd-6th into the
- * promotion playoffs, with the same bottom-3 relegation — also standard
- * English football league structure, not a guess. Which scheme applies is
- * driven by `LeagueDefinition.tier` (see leagues.ts).
+ * standard, not a guess. A second-tier division (the Championship) and a
+ * third-tier one (League One) instead promote their top 2 automatically
+ * and send 3rd-6th into the promotion playoffs — same shape for both,
+ * except League One relegates 4 clubs, not 3 (it feeds League Two, which
+ * has one more relegation slot of its own below it). A fourth-tier
+ * division (League Two) promotes its top 3 automatically, sends 4th-7th
+ * into the playoffs (not 3rd-6th, since the top 3 already go up), and
+ * relegates 2 — all standard English football league structure, not a
+ * guess. Which scheme applies is driven by `LeagueDefinition.tier` (see
+ * leagues.ts).
  */
 export type LeagueZone = 'champions' | 'europa' | 'promotion' | 'playoff' | 'relegation' | null;
 
 export function getLeagueZone(position: number, totalClubs = 20, tier: LeagueDefinition['tier'] = 'top'): LeagueZone {
-  if (tier === 'second') {
+  if (tier === 'second' || tier === 'third') {
     if (position <= 2) return 'promotion';
     if (position <= 6) return 'playoff';
-    if (position > totalClubs - 3) return 'relegation';
+    if (position > totalClubs - (tier === 'third' ? 4 : 3)) return 'relegation';
+    return null;
+  }
+  if (tier === 'fourth') {
+    if (position <= 3) return 'promotion';
+    if (position <= 7) return 'playoff';
+    if (position > totalClubs - 2) return 'relegation';
     return null;
   }
   if (position <= 4) return 'champions';
@@ -34,7 +45,7 @@ export const ZONE_STYLES: Record<Exclude<LeagueZone, null>, { stripe: string; do
 
 /** Which zone kinds can actually appear for a given tier — for filtering a table legend down to the zones that are relevant, rather than listing every zone across every tier. */
 export function zonesForTier(tier: LeagueDefinition['tier']): Exclude<LeagueZone, null>[] {
-  return tier === 'second' ? ['promotion', 'playoff', 'relegation'] : ['champions', 'europa', 'relegation'];
+  return tier === 'top' ? ['champions', 'europa', 'relegation'] : ['promotion', 'playoff', 'relegation'];
 }
 
 export function ordinal(n: number): string {

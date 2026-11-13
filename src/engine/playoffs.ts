@@ -1,3 +1,4 @@
+import type { LeagueDefinition } from '../data/leagues';
 import { simulateMatchday, toEngineClub, type ClubMatchMeta, type DeferredMatchday } from './matchday';
 import { createMatchSimulation, MINUTES_IN_MATCH, MINUTES_WITH_EXTRA_TIME } from './matchSimulator';
 import { simulatePenaltyShootout, type PenaltyShootoutResult } from './penalties';
@@ -29,9 +30,14 @@ export interface TwoLegTie {
   penaltyShootout: PenaltyShootoutResult | null;
 }
 
-/** Seeds the semis from the Championship's final regular-season table (already sorted by computeLeagueTable): 3rd-v-6th, 4th-v-5th. */
-export function generatePlayoffSemiFinals(finalTable: LeagueTableRow[], firstMatchday: number): { semiFinal1: TwoLegTie; semiFinal2: TwoLegTie } {
-  const [, , third, fourth, fifth, sixth] = finalTable;
+/** League Two promotes its top 3 automatically (not top 2), so its playoff seeds from 4th-7th rather than 3rd-6th — see leagueZones.ts. Every other tier with a playoff uses the default seedStart of 3. */
+export function playoffSeedStartForTier(tier: LeagueDefinition['tier']): number {
+  return tier === 'fourth' ? 4 : 3;
+}
+
+/** Seeds the semis from the final regular-season table (already sorted by computeLeagueTable): seedStart-v-(seedStart+3), (seedStart+1)-v-(seedStart+2) — e.g. 3rd-v-6th and 4th-v-5th for the default seedStart of 3, or 4th-v-7th and 5th-v-6th for League Two's seedStart of 4. */
+export function generatePlayoffSemiFinals(finalTable: LeagueTableRow[], firstMatchday: number, seedStart = 3): { semiFinal1: TwoLegTie; semiFinal2: TwoLegTie } {
+  const [third, fourth, fifth, sixth] = finalTable.slice(seedStart - 1, seedStart + 3);
 
   function makeTie(id: string, higherSeed: LeagueTableRow, lowerSeed: LeagueTableRow): TwoLegTie {
     return {
@@ -85,8 +91,8 @@ export interface PlayoffState {
   nextSeed: number;
 }
 
-export function createPlayoffState(table: LeagueTableRow[], firstMatchday: number, seed: number): PlayoffState {
-  const { semiFinal1, semiFinal2 } = generatePlayoffSemiFinals(table, firstMatchday);
+export function createPlayoffState(table: LeagueTableRow[], firstMatchday: number, seed: number, seedStart = 3): PlayoffState {
+  const { semiFinal1, semiFinal2 } = generatePlayoffSemiFinals(table, firstMatchday, seedStart);
   return { table, semiFinal1, semiFinal2, semiFinal1Winner: null, semiFinal2Winner: null, final: null, finalWentToExtraTime: false, finalPenaltyShootout: null, championClubId: null, nextSeed: seed };
 }
 

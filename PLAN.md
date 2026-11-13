@@ -1519,3 +1519,123 @@ checked computed styles directly rather than relying on a screenshot —
 confirmed club-name text now renders in `rgb(23, 37, 29)` (the `ink`
 color) against the panel's `rgb(244, 239, 224)` background, versus
 white-on-cream before the fix. No console errors.
+
+## League One and League Two, with real promotion/relegation into the pyramid
+
+User request: extend the English pyramid two tiers further down —
+League One and League Two, each with real 2008/09 clubs, squads and
+crests, and real promotion/relegation of their own, connected into the
+existing Premier League↔Championship pyramid.
+
+This wasn't just "repeat the Championship pattern twice" — the real
+rules genuinely differ by tier boundary. Premier League↔Championship and
+Championship↔League One are the same shape (3 up — top 2 automatic plus
+a 3rd-6th playoff winner — 3 down), but League One↔League Two isn't:
+League One relegates 4 clubs, not 3 (it has one more division below it
+than the Championship did), and League Two promotes its top 3
+automatically (not top 2) with its playoff seeded 4th-7th rather than
+3rd-6th, since the top 3 already go up on their own. Given lower recall
+confidence for these more obscure divisions, the real final tables and
+promotion/relegation facts for both 2008/09 seasons were checked against
+Wikipedia before any club-list data was written (same honesty-caveat
+convention as every squad file, but the club list and
+promoted/relegated clubs themselves are sourced, not recalled) —
+`leagueOne0809.ts`/`leagueTwo0809.ts`'s own doc comments spell out which
+facts that covers.
+
+**New data**: `leagueOne0809.ts`/`realSquadsLeagueOne0809.ts` and
+`leagueTwo0809.ts`/`realSquadsLeagueTwo0809.ts` (24 clubs each, ids
+prefixed `l1-`/`l2-`), merged into `clubSquads.ts`. A programmatic
+duplicate-name sweep (same technique used for the Championship/La Liga
+squad-depth pass) caught a substantial number of real bugs before they
+shipped — not just the usual within-file duplicates, but ~50 cases
+where a real lower-league player's name had been placed at a club in
+*both* League One and League Two's files, or collided with a name
+already used in the already-shipped Premier League/La Liga/Championship
+squads. All resolved by renaming the incorrect occurrence to a different
+real-or-plausible player rather than leaving two clubs claiming the same
+man in the same season. Every club shipped at 12-14 players from the
+start — having just paid down a "squads too thin" debt across all three
+existing leagues in the immediately preceding task, repeating that
+mistake here was caught and fixed within the same pass rather than
+needing its own follow-up. Real crests for all 48 clubs and both
+divisions' current EFL logos were sourced via the Wikipedia
+wikitext-infobox method (same as every previous league), this time
+scripted end-to-end (wikitext fetch → Commons file URL → download)
+rather than one-by-one, since 48 crests one at a time doesn't scale;
+confirmed live afterward that none silently fell back to the generic
+shield (every `<img>` checked for `naturalWidth > 0`).
+
+**Engine generalization**: `LeagueDefinition.tier` gained `'third'`
+(League One) and `'fourth'` (League Two). `getLeagueZone` gained their
+two cutoff shapes; `zonesForTier` simplified to "top tier shows
+champions/europa/relegation, everything else shows
+promotion/playoff/relegation" now that there are three non-top shapes
+instead of one. `engine/playoffs.ts`'s `generatePlayoffSemiFinals`/
+`createPlayoffState` gained a `seedStart` parameter (default 3; a new
+`playoffSeedStartForTier` helper returns 4 only for League Two) instead
+of a hardcoded 3rd-6th destructure. `utils/pyramid.ts`'s
+`computePyramidTransition` generalized from a Premier
+League/Championship-specific function into a pairwise one parameterized
+by both sides' tiers — it now defers the exact promotion/relegation
+counts to `getLeagueZone` for each side rather than hardcoding a single
+shape, so the same function correctly handles all three real boundary
+shapes (two 3-up-3-down ones and one 4-up/4-down-from-above). A new
+`ENGLISH_PYRAMID` constant (`['premier-league', 'championship',
+'league-one', 'league-two']`) is the explicit top-to-bottom chain used to
+drive transitions and to answer "does this league have a real division
+above/below it" — membership in this array, not `tier`, is what decides
+that, since La Liga shares `tier: 'top'` with the Premier League but has
+no real pyramid relationship to anything.
+
+**Wiring**: every remaining `tier === 'second'`/`!== 'second'` check
+(the Championship-only playoff-creation effect and season-complete flag
+in `CareerScreen`, `backgroundLeague.ts`'s `isSecondTier`,
+`SeasonSummaryScreen`'s champion-disclaimer check) generalized to
+`tier === 'top'`/`!== 'top'`, so any non-top-tier league now gets a
+playoff, not just the Championship. `startNewSeason()`'s hardcoded
+Premier League/Championship transition block became a loop over
+`ENGLISH_PYRAMID`'s adjacent pairs — the already-generic `outcomeFor`
+helper needed no changes, since it already resolved any league id via
+the managed-vs-background split. `divisionOutcome` generalized from
+checking specific league ids to checking this league's index in
+`ENGLISH_PYRAMID`: promotion/playoff outcomes apply whenever the tier
+isn't top; a real `'relegated-real'` outcome applies whenever there's a
+real division below in the chain. **This is a genuine behavior change
+for existing Championship careers, not just new ones**: the
+Championship's own relegation zone stops being "not modeled yet" and
+becomes a real outcome now that League One exists below it.
+`SeasonSummaryScreen`'s promotion/relegation subtitles, previously
+hardcoded to say "the Premier League"/"the Championship", now take the
+actual division names as props (computed from the managed league's
+`ENGLISH_PYRAMID` index) since the same outcome can now fire at any
+boundary in the chain.
+
+New/updated unit tests: `utils/__tests__/leagueZones.test.ts` (new —
+the four tier shapes' exact cutoffs), `engine/__tests__/playoffs.test.ts`
+(seedStart 4 seeds 4th-v-7th/5th-v-6th instead of 3rd-v-6th/4th-v-5th;
+`playoffSeedStartForTier` for all four tiers),
+`utils/__tests__/pyramid.test.ts` (rewritten for the generalized
+signature, covering all three real boundary shapes, each cross-checked
+directly against `getLeagueZone`), `utils/__tests__/backgroundLeague.test.ts`
+(two new cases — fast-forwards League One's and League Two's actual
+24-club data through a full season including the playoff, confirming
+League One's bracket is seeded 3rd-6th like the Championship while
+League Two's is seeded 4th-7th, using the real game data rather than
+synthetic fixtures, the same style already used there for the
+Championship). Full suite (113 tests), `tsc`, and `eslint` all pass.
+Verified live: League One and League Two both appear on Choose a League
+with 24 clubs and a working logo; every one of the 48 new clubs' crests
+loads (no fallback to the generic shield); a League Two club's Team
+Selection screen fields a full starting XI via Coach's Help; the League
+Table screen's zone stripes match League Two's real shape exactly
+(emerald for 1st-3rd, teal for 4th-7th, red for 23rd-24th, nothing
+else) rather than the Championship's; Other Leagues correctly lists all
+4 other leagues from a League Two career; save/resume round-trips
+cleanly; an existing Championship career still starts and selects a club
+with no regression. A full 46-matchday League One/Two season wasn't
+played through live in the browser (too slow to click through end to
+end) — that path is covered instead by the
+`backgroundLeague.test.ts` cases above, which exercise the real
+pyramid-transition and playoff-seeding logic against the actual 24-club
+data for both new divisions, not a simplified stand-in.

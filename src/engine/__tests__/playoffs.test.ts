@@ -5,6 +5,7 @@ import {
   createPlayoffState,
   generatePlayoffSemiFinals,
   getAggregateOffsetForFixture,
+  playoffSeedStartForTier,
   simulateDecisiveFixture,
   type ClubMatchMeta,
 } from '..';
@@ -91,6 +92,25 @@ describe('generatePlayoffSemiFinals', () => {
 
     expect(semiFinal2.higherSeedClubId).toBe('fourth');
     expect(semiFinal2.lowerSeedClubId).toBe('fifth');
+  });
+
+  it('with seedStart 4 (League Two, which promotes its top 3 automatically) pairs 4th-v-7th and 5th-v-6th instead', () => {
+    const SEVEN_TABLE: LeagueTableRow[] = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'].map(row);
+    const { semiFinal1, semiFinal2 } = generatePlayoffSemiFinals(SEVEN_TABLE, 47, 4);
+
+    expect(semiFinal1.higherSeedClubId).toBe('fourth');
+    expect(semiFinal1.lowerSeedClubId).toBe('seventh');
+    expect(semiFinal2.higherSeedClubId).toBe('fifth');
+    expect(semiFinal2.lowerSeedClubId).toBe('sixth');
+  });
+});
+
+describe('playoffSeedStartForTier', () => {
+  it('is 4 for the fourth tier (League Two) and 3 for everything else with a playoff', () => {
+    expect(playoffSeedStartForTier('fourth')).toBe(4);
+    expect(playoffSeedStartForTier('second')).toBe(3);
+    expect(playoffSeedStartForTier('third')).toBe(3);
+    expect(playoffSeedStartForTier('top')).toBe(3);
   });
 });
 

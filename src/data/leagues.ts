@@ -1,5 +1,7 @@
 import { CHAMPIONSHIP_2008_09 } from './championship0809';
 import { LA_LIGA_2008_09 } from './laLiga0809';
+import { LEAGUE_ONE_2008_09 } from './leagueOne0809';
+import { LEAGUE_TWO_2008_09 } from './leagueTwo0809';
 import type { ClubListing } from './premierLeague0809';
 import { PREMIER_LEAGUE_2008_09 } from './premierLeague0809';
 
@@ -24,10 +26,13 @@ export interface LeagueDefinition {
    * to European competition (Champions League / Europa) and relegates its
    * bottom 3; a `'second'` division (the Championship) instead promotes its
    * top 2 automatically and sends 3rd-6th into the promotion playoffs,
-   * alongside the same bottom-3 relegation. Drives `getLeagueZone` in
-   * leagueZones.ts — see PLAN.md.
+   * alongside the same bottom-3 relegation. `'third'` (League One) is the
+   * same shape but relegates 4, not 3. `'fourth'` (League Two) promotes
+   * its top 3 automatically, sends 4th-7th into the playoffs, and
+   * relegates 2 (to a division that isn't modeled here). Drives
+   * `getLeagueZone` in leagueZones.ts — see PLAN.md.
    */
-  tier: 'top' | 'second';
+  tier: 'top' | 'second' | 'third' | 'fourth';
 }
 
 /**
@@ -45,6 +50,8 @@ export const LEAGUES: LeagueDefinition[] = [
   { id: 'premier-league', name: 'Premier League', clubs: PREMIER_LEAGUE_2008_09, logoPath: 'leagues/premier-league.png', tier: 'top' },
   { id: 'la-liga', name: 'La Liga', clubs: LA_LIGA_2008_09, logoPath: 'leagues/la-liga.png', tier: 'top' },
   { id: 'championship', name: 'Championship', clubs: CHAMPIONSHIP_2008_09, logoPath: 'leagues/championship.svg', tier: 'second' },
+  { id: 'league-one', name: 'League One', clubs: LEAGUE_ONE_2008_09, logoPath: 'leagues/league-one.svg', tier: 'third' },
+  { id: 'league-two', name: 'League Two', clubs: LEAGUE_TWO_2008_09, logoPath: 'leagues/league-two.svg', tier: 'fourth' },
 ];
 
 /** Every club across every league, flattened — for lookups where it doesn't matter which league a club belongs to (crest/colors/stadium display). Club ids are unique across leagues by construction. */
