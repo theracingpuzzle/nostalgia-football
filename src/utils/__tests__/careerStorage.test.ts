@@ -58,4 +58,25 @@ describe('careerStorage', () => {
     localStorage.setItem('fsm-career-v1', JSON.stringify({ foo: 'bar' }));
     expect(loadCareer()).toBeNull();
   });
+
+  it('round-trips the manager fields (job security, tenure, league managers, news, and a pending sacking)', () => {
+    const save = makeSave({
+      leagueManagers: { chelsea: { name: 'Luiz Felipe Scolari', confidence: 40, tenureStartMatchday: 1 } },
+      managerJobSecurity: 32,
+      managerTenureStartMatchday: 5,
+      managerNews: [{ clubId: 'chelsea', outgoingName: 'Luiz Felipe Scolari', incomingName: 'Guus Hiddink', matchday: 25 }],
+      sackedState: { offeredClubIds: ['fulham', 'everton'] },
+    });
+    saveCareer(save);
+    expect(loadCareer()).toEqual(save);
+  });
+
+  it('loads an old save with none of the manager fields present', () => {
+    const save = makeSave();
+    saveCareer(save);
+    const loaded = loadCareer();
+    expect(loaded?.leagueManagers).toBeUndefined();
+    expect(loaded?.managerJobSecurity).toBeUndefined();
+    expect(loaded?.sackedState).toBeUndefined();
+  });
 });

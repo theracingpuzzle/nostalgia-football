@@ -1639,3 +1639,133 @@ end) — that path is covered instead by the
 `backgroundLeague.test.ts` cases above, which exercise the real
 pyramid-transition and playoff-seeding logic against the actual 24-club
 data for both new divisions, not a simplified stand-in.
+
+## Real managers, plus managerial sacking/hiring
+
+User request: give every club a named manager (real where researched)
+and a genuine sacking/hiring mechanic — not just flavor for AI clubs,
+but a real job-security risk for the player's own career. Confirmed
+scope: sacking applies to the player too; real names cover the Premier
+League and La Liga only (40 clubs) for now, sourced from Wikipedia the
+same way as crests/squads (`src/data/managers0809.ts`) — several needed
+cross-checking against the club's actual in-season managerial timeline
+to get the real *August 2008* name right (Real Madrid started with
+Bernd Schuster, not Juande Ramos, who only took over in December;
+Atlético Madrid started with Javier Aguirre, not Abel Resino). Every
+other league's clubs draw a clearly-invented name from a 24-name
+placeholder pool instead, deterministic per club.
+
+A real, detailed record of that season's actual managerial changes
+(Scolari→Hiddink at Chelsea, Ramos→Redknapp at Tottenham, Ince→Allardyce
+at Blackburn, and others, with real dates) came out of that research,
+and scripting those in as fixed in-season events was considered — but
+rejected. This engine already treats every match result, and therefore
+every league position and promotion/relegation outcome, as something
+the simulation produces fresh from a seed, never literally replayed
+from history. A scripted historical sacking landing on a club the
+*simulation* has doing well (or sparing one it has struggling) would be
+the first thing in the whole game to contradict its own table. Instead,
+`engine/managers.ts` is a simple position/form-driven pressure model —
+same deliberately-simple, fully-explainable shape as `engine/injuries.ts`
+— applied identically to AI clubs and the player: a club's manager has a
+0-100 confidence value that regresses toward a neutral starting point
+every matchday, then moves with league position and recent form (last 5
+played fixtures, +1 win/0 draw/-1 loss); crossing a threshold (after a
+6-matchday grace period for any new hire) gets them sacked. No RNG in
+the sacking *decision* — only in which replacement name gets picked
+(50/50 between recycling another name sacked the same round, or a fresh
+placeholder-pool draw).
+
+**AI clubs**: `BackgroundLeagueState` gained `managers`/`managerNews`;
+`advanceBackgroundLeagueMatchday` runs the update right after
+`applyInjuryUpdates` each matchday. Visible via a new "Managerial News"
+panel on `LeagueTableScreen` (shared by both `OtherLeaguesScreen` and
+the managed league's own Table tab) and a manager line on
+`ClubOverviewScreen`.
+
+**The player**: a parallel `managerJobSecurity`/`managerTenureStartMatchday`
+pair in `CareerScreen` (not a `ClubManagerState` — the player isn't
+drawn from a name pool), updated at the same point `applyInjuryUpdates`
+already runs for the managed league. Crossing the threshold hands the
+just-vacated club a fresh AI manager and surfaces a new
+`ManagerSackedScreen` overlay (modeled on `SeasonSummaryScreen`) with a
+short list of same-league job offers — preferring clubs that just had
+an AI vacancy, for narrative coherence — and no decline option anywhere,
+consistent with this game having no other hard "game over" state.
+Job-swaps are same-league only (realistic — English managers don't move
+into La Liga mid-season — and avoids reconciling different season
+lengths mid-season). Taking a job reuses the *existing* remount-via-`key={club.id}`
+mechanism `App.tsx` already had for "Change Club," just saving the
+carried-over state first instead of clearing it — confirmed directly
+against the code (`CareerScreen.tsx`'s `resume = initialSave &&
+initialSave.clubId === club.id ? initialSave : undefined`) that every
+piece of state, including `fixtures`/`backgroundLeagues`/`allSquads`,
+already falls back to the resumed save correctly, so no new "mid-career
+club swap" code path was needed at all beyond building the right
+`CareerSaveData` object. A small job-security pill sits in `CareerNav`
+next to the league-position one (bands set relative to the starting
+confidence of 55, not an absolute midpoint — a brand-new hire reads as
+"Secure," not already under pressure on day one, a mistake caught live
+during verification and fixed before shipping).
+
+New tests: `data/__tests__/managers0809.test.ts` (every PL/La Liga id
+covered, no lower-league id leaked in, deterministic placeholders),
+`engine/__tests__/managers.test.ts` (grace period, threshold, no
+duplicate/blank replacement names, confidence regression), extended
+`backgroundLeague.test.ts` (every league's full-season fast-forward now
+also asserts every club has a manager, including a dedicated Premier
+League case confirming real names seed correctly) and
+`careerStorage.test.ts` (round-trips all five new optional fields).
+Full suite (145 tests), `tsc`, `eslint` all clean. Verified live: a
+fresh hire shows "Secure" in the header; League Table's manager lines
+and "(You)" tag work for both the managed and AI clubs; forcing a
+sacking via a `managerJobSecurity`/`managerTenureStartMatchday`
+localStorage injection (same technique used for the playoff-screen fix)
+produced the sacked overlay with sensible same-league offers, and
+taking one (Everton, mid-table, while Chelsea was the old job)
+correctly swapped the managed club while leaving the league table,
+background leagues, and every squad's injury state untouched — Chelsea
+immediately showed a fresh placeholder AI manager, and Everton's own
+already-simulated squad (complete with an existing injury) loaded
+correctly under the new job.
+
+## Fixed: a heavily injury-depleted squad could permanently block Play Next Fixture
+
+Bug report: if enough players were injured at once, the squad could
+drop below 11 fit players, and the player would have no way to ever
+reach a full Starting XI again — "Play Next Fixture" stays disabled
+forever once this happens, a real soft-lock, not a crash.
+
+Root cause: `engine/squadAuto.ts`'s `pickBestXI` (used for AI-controlled
+clubs, including every OTHER club in a human-managed match) already had
+a safety net for this — "if fewer than 11 fit players, fall back to the
+full squad regardless of injury status" — but the player's OWN manual
+Team Selection flow had no equivalent. `TeamSelectionScreen.tsx`'s
+"Coach's Help" (`fillEmptySlotsWithCoachPick`) only had a safety net for
+one specific case, an all-injured goalkeeper corps (the pre-existing
+"emergency keeper" rule), not a general outfield shortage — and manual
+drag-and-drop can never place an injured player at all. With fewer than
+11 fit players total, both paths left slots permanently empty.
+
+Fix: `fillEmptySlotsWithCoachPick` gained a final fallback after the
+existing emergency-keeper step — if slots are STILL empty once every
+fit player (and the emergency keeper) is already on the pitch, fill
+whatever's left from injured players, ranked by rating, same "a real,
+if rare, football scenario — clubs don't forfeit for this" reasoning
+already used for the keeper case. The pitch itself needed no changes —
+`PitchSlotView` never checked `player.injured` to begin with (that
+restriction only ever applied to the bench/squad list, where you
+wouldn't want to drag an injured player INTO the XI by hand — once
+they're on the pitch via this fallback, they're fully draggable like
+any other starter). A new 🚑 line in the Coach's Help advice panel names
+whoever's playing through it, so the simplification stays visible
+rather than silently swapping someone in.
+
+Verified: new unit tests in `screens/__tests__/TeamSelectionScreen.test.ts`
+(exported `fillEmptySlotsWithCoachPick`/`buildEmptySlots`/`Slot` for
+this) covering the normal case, the existing emergency-keeper case, and
+the new last-resort case (a 12-player squad with 4 injured, confirming
+all 11 slots still fill with no player used twice). Live: injected a
+19-player squad with only 8 fit into localStorage, confirmed Coach's
+Help still reached "Starting XI: 11/11" and the advice panel correctly
+named the 6 injured players forced into the side.

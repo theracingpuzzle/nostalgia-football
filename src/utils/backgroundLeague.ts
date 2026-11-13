@@ -4,11 +4,15 @@ import {
   advancePlayoff,
   applyInjuryUpdates,
   computeLeagueTable,
+  createClubManagers,
   createPlayoffState,
   createRandom,
   generateFixtures,
   playoffSeedStartForTier,
   simulateMatchday,
+  updateLeagueManagers,
+  type ClubManagerState,
+  type ManagerSackingEvent,
   type PlayoffState,
 } from '../engine';
 import type { Fixture, Player } from '../engine/types';
@@ -30,10 +34,14 @@ export interface BackgroundLeagueState {
   nextSeed: number;
   /** Only ever populated for a non-top-tier league (Championship, League One, League Two). */
   playoff: PlayoffState | null;
+  /** Every club's current manager and how much trouble they're in — see engine/managers.ts. Resets fresh every season, same simplification already applied to everything else here. */
+  managers: Record<string, ClubManagerState>;
+  /** Sackings that have actually happened this season, newest first. */
+  managerNews: ManagerSackingEvent[];
 }
 
 export function createBackgroundLeagueState(leagueId: string, clubIds: string[], seed: number): BackgroundLeagueState {
-  return { leagueId, clubIds, fixtures: generateFixtures(clubIds), nextSeed: seed, playoff: null };
+  return { leagueId, clubIds, fixtures: generateFixtures(clubIds), nextSeed: seed, playoff: null, managers: createClubManagers(clubIds), managerNews: [] };
 }
 
 function hasPlayoff(leagueId: string): boolean {
@@ -77,7 +85,13 @@ export function advanceBackgroundLeagueMatchday(
     });
     const injuryRandom = createRandom(nextSeed);
     const updatedAllSquads = applyInjuryUpdates(allSquads, matchday, playedPlayerIdsByClub, injuryRandom);
-    return { nextState: { ...state, fixtures: nextFixtures, nextSeed: nextSeed + 1 }, updatedAllSquads };
+    const managerRandom = createRandom(nextSeed + 1);
+    const table = computeLeagueTable(state.clubIds, nextFixtures);
+    const { nextManagers, sackings } = updateLeagueManagers(state.managers, state.clubIds, table, nextFixtures, matchday, managerRandom);
+    return {
+      nextState: { ...state, fixtures: nextFixtures, nextSeed: nextSeed + 2, managers: nextManagers, managerNews: [...sackings, ...state.managerNews] },
+      updatedAllSquads,
+    };
   }
 
   // Regular season just finished and this league has a playoff — seed the bracket, one step at a time, same as everything else here.

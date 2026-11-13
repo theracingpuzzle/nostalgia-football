@@ -7,7 +7,7 @@ import { ManagerNameScreen } from './screens/ManagerNameScreen';
 import { TitleScreen } from './screens/TitleScreen';
 import { SQUADS_BY_CLUB_ID } from './data/clubSquads';
 import { ALL_CLUBS, LEAGUES, getLeagueForClub } from './data/leagues';
-import { clearCareer, loadCareer, type CareerSaveData } from './utils/careerStorage';
+import { clearCareer, loadCareer, saveCareer, type CareerSaveData } from './utils/careerStorage';
 
 type Stage = 'title' | 'managerName' | 'leagueSelect' | { kind: 'clubSelect'; leagueId: string } | { kind: 'career'; clubId: string };
 
@@ -82,6 +82,14 @@ function App() {
             setSavedCareer(null);
             setStage('leagueSelect');
           }}
+          onTakeNewJob={(newClubId, nextSave) => {
+            // A sacking, unlike "Change Club," keeps the career going —
+            // same remount-via-key mechanism, just saving the carried-over
+            // state first instead of clearing it. See PLAN.md.
+            saveCareer(nextSave);
+            setSavedCareer(nextSave);
+            setStage({ kind: 'career', clubId: newClubId });
+          }}
         />
       )}
     </div>
@@ -93,11 +101,13 @@ function ClubRoute({
   managerName,
   initialSave,
   onChangeClub,
+  onTakeNewJob,
 }: {
   clubId: string;
   managerName: string;
   initialSave?: CareerSaveData;
   onChangeClub: () => void;
+  onTakeNewJob: (newClubId: string, nextSave: CareerSaveData) => void;
 }) {
   const club = ALL_CLUBS.find((c) => c.id === clubId);
   const squad = SQUADS_BY_CLUB_ID[clubId];
@@ -118,7 +128,7 @@ function ClubRoute({
   }
 
   // key={club.id} forces a fresh CareerScreen (and its fixtures/table/XI state) whenever the club changes.
-  return <CareerScreen key={club.id} club={club} squad={squad} managerName={managerName} onChangeClub={onChangeClub} initialSave={initialSave} />;
+  return <CareerScreen key={club.id} club={club} squad={squad} managerName={managerName} onChangeClub={onChangeClub} onTakeNewJob={onTakeNewJob} initialSave={initialSave} />;
 }
 
 export default App;

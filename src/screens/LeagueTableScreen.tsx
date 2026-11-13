@@ -3,6 +3,7 @@ import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
 import { ALL_CLUBS } from '../data/leagues';
 import type { LeagueDefinition } from '../data/leagues';
+import type { ManagerSackingEvent } from '../engine/managers';
 import type { Fixture, LeagueTableRow, Player } from '../engine/types';
 import { getLeagueZone, zonesForTier, ZONE_STYLES } from '../utils/leagueZones';
 import { ClubOverviewScreen } from './ClubOverviewScreen';
@@ -13,12 +14,18 @@ export function LeagueTableScreen({
   fixtures,
   allSquads,
   leagueTier,
+  managerNews,
+  managerNameOf,
 }: {
   table: LeagueTableRow[];
   managedClubId: string;
   fixtures: Fixture[];
   allSquads: Record<string, Player[]>;
   leagueTier: LeagueDefinition['tier'];
+  /** This league's managerial sackings, newest first — see engine/managers.ts. Omitted where a league doesn't have manager data wired up yet. */
+  managerNews?: ManagerSackingEvent[];
+  /** This league's current manager for a given club, if known. */
+  managerNameOf?: (clubId: string) => string | undefined;
 }) {
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const selectedClub = selectedClubId ? ALL_CLUBS.find((c) => c.id === selectedClubId) : null;
@@ -27,6 +34,22 @@ export function LeagueTableScreen({
   return (
     <div className="mx-auto max-w-3xl p-4">
       <h2 className="mb-3 text-xl font-black uppercase tracking-wide text-white">League Table</h2>
+
+      {managerNews && managerNews.length > 0 && (
+        <Panel title="Managerial News" className="mb-3">
+          <div className="flex flex-col gap-1 p-1 text-xs text-ink/80">
+            {managerNews.slice(0, 5).map((event, i) => {
+              const eventClub = ALL_CLUBS.find((c) => c.id === event.clubId);
+              return (
+                <p key={`${event.clubId}-${event.matchday}-${i}`}>
+                  Matchday {event.matchday}: {eventClub?.shortName ?? event.clubId} sack {event.outgoingName}, appoint {event.incomingName}.
+                </p>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
       <Panel>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
@@ -101,6 +124,8 @@ export function LeagueTableScreen({
             squad={allSquads[selectedClub.id] ?? []}
             fixtures={fixtures}
             allSquads={allSquads}
+            managerName={managerNameOf?.(selectedClub.id)}
+            isManagedByPlayer={selectedClub.id === managedClubId}
             onClose={() => setSelectedClubId(null)}
           />
         </div>

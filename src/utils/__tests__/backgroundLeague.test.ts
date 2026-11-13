@@ -1,10 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { SQUADS_BY_CLUB_ID } from '../../data/clubSquads';
 import { LEAGUES } from '../../data/leagues';
-import { advanceBackgroundLeagueMatchday, createBackgroundLeagueState, fastForwardBackgroundLeagueSeason, isBackgroundLeagueSeasonComplete } from '../backgroundLeague';
+import { MANAGER_STARTING_CONFIDENCE } from '../../engine';
+import { advanceBackgroundLeagueMatchday, createBackgroundLeagueState, fastForwardBackgroundLeagueSeason, isBackgroundLeagueSeasonComplete, type BackgroundLeagueState } from '../backgroundLeague';
 
 function clubIdsFor(leagueId: string): string[] {
   return LEAGUES.find((l) => l.id === leagueId)!.clubs.map((c) => c.id);
+}
+
+/** Every club has a named manager, and every managerNews entry (if any) refers to a real club and a matchday that actually happened this season. */
+function assertManagersAreWellFormed(state: BackgroundLeagueState, clubIds: string[]) {
+  for (const clubId of clubIds) {
+    expect(state.managers[clubId]).toBeDefined();
+    expect(state.managers[clubId].name.trim().length).toBeGreaterThan(0);
+  }
+  const totalMatchdays = Math.max(0, ...state.fixtures.map((f) => f.matchday));
+  for (const event of state.managerNews) {
+    expect(clubIds).toContain(event.clubId);
+    expect(event.matchday).toBeGreaterThanOrEqual(1);
+    expect(event.matchday).toBeLessThanOrEqual(totalMatchdays + 20); // +20 covers the playoff's own extra matchdays, which aren't in `fixtures`
+    expect(event.outgoingName.trim().length).toBeGreaterThan(0);
+    expect(event.incomingName.trim().length).toBeGreaterThan(0);
+  }
 }
 
 describe('advanceBackgroundLeagueMatchday', () => {
@@ -36,6 +53,7 @@ describe('fastForwardBackgroundLeagueSeason', () => {
     expect(nextState.fixtures.every((f) => f.played)).toBe(true);
     expect(nextState.playoff).toBeNull();
     expect(isBackgroundLeagueSeasonComplete(nextState)).toBe(true);
+    assertManagersAreWellFormed(nextState, clubIds);
   });
 
   it('fully resolves the Championship\'s season AND its promotion playoff', () => {
@@ -50,6 +68,7 @@ describe('fastForwardBackgroundLeagueSeason', () => {
     const top6 = nextState.playoff!.table.slice(0, 6).map((r) => r.clubId);
     expect(top6).toContain(nextState.playoff!.championClubId);
     expect(isBackgroundLeagueSeasonComplete(nextState)).toBe(true);
+    assertManagersAreWellFormed(nextState, clubIds);
   });
 
   it('fully resolves League One\'s season AND its promotion playoff (same 3rd-6th seeding shape as the Championship)', () => {
@@ -66,6 +85,7 @@ describe('fastForwardBackgroundLeagueSeason', () => {
     const seededClubIds = [nextState.playoff!.semiFinal1.higherSeedClubId, nextState.playoff!.semiFinal1.lowerSeedClubId, nextState.playoff!.semiFinal2.higherSeedClubId, nextState.playoff!.semiFinal2.lowerSeedClubId];
     expect(seededClubIds.sort()).toEqual(nextState.playoff!.table.slice(2, 6).map((r) => r.clubId).sort());
     expect(isBackgroundLeagueSeasonComplete(nextState)).toBe(true);
+    assertManagersAreWellFormed(nextState, clubIds);
   });
 
   it('fully resolves League Two\'s season AND its promotion playoff, seeded 4th-7th (not 3rd-6th) since the top 3 go up automatically', () => {
@@ -82,5 +102,30 @@ describe('fastForwardBackgroundLeagueSeason', () => {
     const seededClubIds = [nextState.playoff!.semiFinal1.higherSeedClubId, nextState.playoff!.semiFinal1.lowerSeedClubId, nextState.playoff!.semiFinal2.higherSeedClubId, nextState.playoff!.semiFinal2.lowerSeedClubId];
     expect(seededClubIds.sort()).toEqual(seeds4to7.sort());
     expect(isBackgroundLeagueSeasonComplete(nextState)).toBe(true);
+    assertManagersAreWellFormed(nextState, clubIds);
+  });
+
+  it('fully resolves the Premier League\'s season starting from its real 2008/09 managers', () => {
+    const clubIds = clubIdsFor('premier-league');
+    const state = createBackgroundLeagueState('premier-league', clubIds, 1);
+    expect(state.managers['man-utd'].name).toBe('Sir Alex Ferguson');
+    expect(state.managers['arsenal'].name).toBe('Arsène Wenger');
+
+    const { nextState } = fastForwardBackgroundLeagueSeason(state, SQUADS_BY_CLUB_ID);
+    expect(isBackgroundLeagueSeasonComplete(nextState)).toBe(true);
+    assertManagersAreWellFormed(nextState, clubIds);
+  });
+});
+
+describe('createBackgroundLeagueState manager seeding', () => {
+  it('gives every club a manager entry at full confidence from matchday 1', () => {
+    const clubIds = clubIdsFor('championship');
+    const state = createBackgroundLeagueState('championship', clubIds, 1);
+    for (const clubId of clubIds) {
+      expect(state.managers[clubId].confidence).toBe(MANAGER_STARTING_CONFIDENCE);
+      expect(state.managers[clubId].tenureStartMatchday).toBe(1);
+      expect(state.managers[clubId].name.trim().length).toBeGreaterThan(0);
+    }
+    expect(state.managerNews).toEqual([]);
   });
 });

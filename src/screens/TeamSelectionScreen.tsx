@@ -13,13 +13,13 @@ import { getContrastTextColor } from '../utils/colorContrast';
 // than a guess. See PLAN.md.
 const COLUMN_ORDER: Position[] = ['GK', 'DEF', 'MID', 'FWD'];
 
-interface Slot {
+export interface Slot {
   id: string;
   position: Position;
   playerId: string | null;
 }
 
-function buildEmptySlots(formation: Formation): Slot[] {
+export function buildEmptySlots(formation: Formation): Slot[] {
   return expandSlots(formation).map((position, i) => ({ id: `slot-${i}`, position, playerId: null }));
 }
 
@@ -62,7 +62,7 @@ function abbreviatePitchName(fullName: string): string {
  * like just the gap (e.g. "need 2 more DEF, 1 more FWD") so pickBestXI
  * doesn't over- or under-pick relative to what's actually missing.
  */
-function fillEmptySlotsWithCoachPick(
+export function fillEmptySlotsWithCoachPick(
   slots: Slot[],
   squad: Player[],
   pseudoClub: { id: string; name: string; shortName: string; colors: { primary: string; secondary: string }; reputation: number; players: Player[] },
@@ -106,18 +106,39 @@ function fillEmptySlotsWithCoachPick(
   // there's truly no fit GK left; a normal keeper is always preferred.
   const stillUsedIds = new Set(filled.map((s) => s.playerId).filter((id): id is string => id !== null));
   const hasFitGKRemaining = squad.some((p) => p.position === 'GK' && !p.injured && !stillUsedIds.has(p.id));
-  if (!hasFitGKRemaining) {
-    const emergencyCandidates = squad
-      .filter((p) => !p.injured && !stillUsedIds.has(p.id))
-      .sort((a, b) => b.attributes.defending + b.attributes.physical - (a.attributes.defending + a.attributes.physical));
-    return filled.map((slot) => {
-      if (slot.position !== 'GK' || slot.playerId !== null) return slot;
-      const emergencyPlayer = emergencyCandidates.shift();
+  const afterEmergencyKeeper = hasFitGKRemaining
+    ? filled
+    : (() => {
+        const emergencyCandidates = squad
+          .filter((p) => !p.injured && !stillUsedIds.has(p.id))
+          .sort((a, b) => b.attributes.defending + b.attributes.physical - (a.attributes.defending + a.attributes.physical));
+        return filled.map((slot) => {
+          if (slot.position !== 'GK' || slot.playerId !== null) return slot;
+          const emergencyPlayer = emergencyCandidates.shift();
+          return emergencyPlayer ? { ...slot, playerId: emergencyPlayer.id } : slot;
+        });
+      })();
+
+  // Last resort: a squad genuinely too injury-depleted to reach 11 fit
+  // players at all (same shortfall pickBestXI already falls back for when
+  // fielding an AI side — see engine/squadAuto.ts) would otherwise leave
+  // Play Next Fixture permanently disabled with no way to recover. Real
+  // clubs don't forfeit for this; an injured player plays through it
+  // instead. Only ever fills whatever's STILL empty after every fit
+  // player (and the emergency keeper, above) is already on the pitch.
+  const finalUsedIds = new Set(afterEmergencyKeeper.map((s) => s.playerId).filter((id): id is string => id !== null));
+  if (afterEmergencyKeeper.some((s) => s.playerId === null)) {
+    const injuredCandidates = squad
+      .filter((p) => p.injured && !finalUsedIds.has(p.id))
+      .sort((a, b) => b.attributes.defending + b.attributes.physical + b.attributes.pace - (a.attributes.defending + a.attributes.physical + a.attributes.pace));
+    return afterEmergencyKeeper.map((slot) => {
+      if (slot.playerId !== null) return slot;
+      const emergencyPlayer = injuredCandidates.shift();
       return emergencyPlayer ? { ...slot, playerId: emergencyPlayer.id } : slot;
     });
   }
 
-  return filled;
+  return afterEmergencyKeeper;
 }
 
 interface TeamSelectionScreenProps {
@@ -215,6 +236,8 @@ export function TeamSelectionScreen({
   const xiIds = useMemo(() => new Set(slots.map((s) => s.playerId).filter((id): id is string => id !== null)), [slots]);
   const substitutes = squad.filter((p) => !xiIds.has(p.id));
   const injuredPlayers = useMemo(() => squad.filter((p) => p.injured), [squad]);
+  // Only ever non-empty via fillEmptySlotsWithCoachPick's last-resort fallback — a squad too injury-depleted to field 11 fit players plays an injured one through it rather than leaving the XI permanently incomplete.
+  const fieldedInjuredPlayers = useMemo(() => squad.filter((p) => p.injured && xiIds.has(p.id)), [squad, xiIds]);
 
   const moraleByPlayerId = useMemo(() => {
     const map = new Map<string, MoraleInfo>();
@@ -356,6 +379,14 @@ export function TeamSelectionScreen({
                   <li className="flex gap-1.5">
                     <span aria-hidden>✅</span>
                     <span>No fresh injury concerns.</span>
+                  </li>
+                )}
+                {fieldedInjuredPlayers.length > 0 && (
+                  <li className="flex gap-1.5">
+                    <span aria-hidden>🚑</span>
+                    <span>
+                      Not enough fit players for a full XI — {fieldedInjuredPlayers.map((p) => p.name).join(', ')} {fieldedInjuredPlayers.length === 1 ? 'is' : 'are'} playing through an injury.
+                    </span>
                   </li>
                 )}
                 {unsettledPlayers.length > 0 && (

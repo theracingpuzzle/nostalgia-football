@@ -10,3 +10,4 @@ export * from './playoffs';
 export * from './squadAuto';
 export * from './ratings';
 export * from './injuries';
+export * from './managers';

@@ -41,6 +41,8 @@ export function OtherLeaguesScreen({ backgroundLeagues, allSquads }: { backgroun
           fixtures={selected.fixtures}
           allSquads={allSquads}
           leagueTier={league.tier}
+          managerNews={selected.managerNews}
+          managerNameOf={(id) => selected.managers[id]?.name}
         />
       </div>
     );

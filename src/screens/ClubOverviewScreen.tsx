@@ -25,6 +25,8 @@ export function ClubOverviewScreen({
   squad,
   fixtures,
   allSquads,
+  managerName,
+  isManagedByPlayer,
   onClose,
 }: {
   club: ClubListing;
@@ -35,6 +37,10 @@ export function ClubOverviewScreen({
   squad: Player[];
   fixtures: Fixture[];
   allSquads: Record<string, Player[]>;
+  /** This club's current manager, if known — see engine/managers.ts. Undefined for a league this screen doesn't have manager data wired up for yet. */
+  managerName?: string;
+  /** True for the player's own club, so the manager line can say "(You)" instead of implying a separate AI manager. */
+  isManagedByPlayer?: boolean;
   onClose: () => void;
 }) {
   const playerIndex = useMemo(() => {
@@ -73,6 +79,12 @@ export function ClubOverviewScreen({
               {zone && <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${ZONE_STYLES[zone].dot}`} />}
               {ordinal(leaguePosition)} of {totalClubs}
             </span>
+            {managerName && (
+              <span className="block text-xs text-white/70">
+                Managed by {managerName}
+                {isManagedByPlayer && ' (You)'}
+              </span>
+            )}
           </div>
         </div>
         <Button variant="secondary" onClick={onClose}>

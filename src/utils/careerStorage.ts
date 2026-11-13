@@ -1,4 +1,5 @@
 import type { CareerScreenId } from '../components/layout/CareerNav';
+import type { ClubManagerState, ManagerSackingEvent } from '../engine/managers';
 import type { PlayoffState } from '../engine/playoffs';
 import type { Fixture, Player } from '../engine/types';
 import type { TransferOffer, TransferTimelineEntry } from '../screens/TransferWindowScreen';
@@ -27,6 +28,16 @@ export interface CareerSaveData {
   backgroundLeagues?: BackgroundLeagueState[];
   /** The Championship promotion playoff, once the managed club's regular season ends — only ever set for a tier:'second' career. See engine/playoffs.ts. */
   managedPlayoff?: PlayoffState | null;
+  /** Every OTHER club in the managed league's manager and how much trouble they're in — never an entry for `clubId` itself. Absent on an old save, which just means "not seeded yet," rebuilt fresh next time CareerScreen mounts. See engine/managers.ts. */
+  leagueManagers?: Record<string, ClubManagerState>;
+  /** The player's own job security, 0-100 — absent on an old save, treated as a fresh hire (MANAGER_STARTING_CONFIDENCE). */
+  managerJobSecurity?: number;
+  /** The matchday the player's CURRENT job began — absent on an old save, treated as matchday 1 (so an old save's manager gets a fresh grace period rather than being instantly sackable). */
+  managerTenureStartMatchday?: number;
+  /** The managed league's own managerial news feed, newest first. */
+  managerNews?: ManagerSackingEvent[];
+  /** Set only while a sacking is awaiting the player's decision — resumable (reloading mid-decision shows the same offers, not a reroll). */
+  sackedState?: { offeredClubIds: string[] } | null;
   screen: CareerScreenId;
   formationId: string;
   selectedXI: string[];

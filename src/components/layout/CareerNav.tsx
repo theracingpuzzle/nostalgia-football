@@ -59,6 +59,16 @@ function NavButtons({
   );
 }
 
+/** Same dot+label visual pattern as ZONE_STYLES, but this isn't a league zone — it's the player's own job security (see engine/managers.ts). */
+// Bands are set relative to MANAGER_STARTING_CONFIDENCE (55 — see
+// engine/managers.ts), not an absolute midpoint: a brand-new hire should
+// always read as "Secure," not already under pressure on day one.
+function jobSecurityBand(confidence: number): { label: string; dot: string } {
+  if (confidence >= 45) return { label: 'Secure', dot: 'bg-emerald-500' };
+  if (confidence >= 20) return { label: 'Under Pressure', dot: 'bg-amber-400' };
+  return { label: 'On The Brink', dot: 'bg-red-600' };
+}
+
 export function CareerNav({
   club,
   managerName,
@@ -66,6 +76,7 @@ export function CareerNav({
   leaguePosition,
   totalClubs,
   leagueTier,
+  jobSecurity,
   onNavigate,
   onChangeClub,
 }: {
@@ -76,12 +87,15 @@ export function CareerNav({
   leaguePosition: number;
   totalClubs: number;
   leagueTier: LeagueDefinition['tier'];
+  /** The player's own job security, 0-100 — see engine/managers.ts. */
+  jobSecurity: number;
   onNavigate: (screen: CareerScreenId) => void;
   onChangeClub: () => void;
 }) {
   const textColor = getContrastTextColor(club.primaryColor);
   const [menuOpen, setMenuOpen] = useState(false);
   const zone = getLeagueZone(leaguePosition, totalClubs, leagueTier);
+  const security = jobSecurityBand(jobSecurity);
 
   return (
     <div className="relative border-b-2 border-black/30 px-3 py-2" style={{ backgroundColor: club.primaryColor }}>
@@ -105,6 +119,14 @@ export function CareerNav({
             <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${zone ? ZONE_STYLES[zone].dot : 'bg-white/60'}`} />
             {ordinal(leaguePosition)}
           </button>
+          <span
+            className="hidden shrink-0 items-center gap-1.5 rounded-sm border-2 px-2 py-1 text-xs font-bold sm:flex"
+            style={{ borderColor: 'rgba(255,255,255,0.4)', color: textColor, backgroundColor: 'rgba(255,255,255,0.15)' }}
+            title="Your job security with the board"
+          >
+            <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${security.dot}`} />
+            {security.label}
+          </span>
         </div>
 
         {/* Desktop nav */}
@@ -129,6 +151,10 @@ export function CareerNav({
       {/* Mobile dropdown */}
       {menuOpen && (
         <nav className="mt-2 flex flex-col gap-1 border-t-2 border-black/20 pt-2 md:hidden">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold uppercase tracking-wide sm:hidden" style={{ color: textColor, opacity: 0.8 }}>
+            <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${security.dot}`} />
+            Job security: {security.label}
+          </div>
           <NavButtons
             screen={screen}
             club={club}
