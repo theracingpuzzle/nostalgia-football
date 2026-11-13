@@ -18,17 +18,18 @@ import type { Player, Position } from '../engine/types';
  * original (see PLAN.md — the original's actual attribute system is
  * unknown) — these screens don't display them yet.
  *
- * SQUAD DEPTH (added later): several clubs originally only had 11-17
- * players, which — once injuries became a simulated, ongoing mechanic (see
- * engine/injuries.ts) — could genuinely leave a club without enough fit
- * players to field a full XI. Bulked up with real squad players from that
- * season, same confidence caveat as above (lower for fringe depth than for
- * first-teamers). A few clubs (Blackburn, Hull, Middlesbrough) are still
- * only one recognized goalkeeper deep — rather than guess a name I'm not
- * confident about, the game itself now has a fallback for this: if every
- * recognized keeper at a club is injured, an outfield player can go in goal
- * (a real, if rare, football scenario), so the game doesn't get stuck even
- * where the data still has a gap.
+ * SQUAD DEPTH (added later, twice): several clubs originally only had
+ * 11-17 players, which — once injuries became a simulated, ongoing
+ * mechanic (see engine/injuries.ts) — could genuinely leave a club
+ * without enough fit players to field a full XI. Bulked up with real
+ * squad players from that season, same confidence caveat as above (lower
+ * for fringe depth than for first-teamers); a second pass gave Blackburn,
+ * Sunderland, Hull and Middlesbrough — the thinnest clubs, down at 13-14
+ * — a few more each, Hull/Blackburn/Middlesbrough included, so they're no
+ * longer only one recognized keeper deep. The game still has a fallback
+ * for this regardless: if every recognized keeper at a club is injured,
+ * an outfield player can go in goal (a real, if rare, football
+ * scenario), so it doesn't get stuck even where the data still has a gap.
  */
 
 let counter = 0;
@@ -174,20 +175,20 @@ export const REAL_SQUADS_2008_09: Record<string, Player[]> = {
   blackburn: [
     mk('Jason Brown', 'GK', 30),
     mk('Chris Samba', 'DEF', 24), mk('Ryan Nelsen', 'DEF', 31), mk('Stephen Warnock', 'DEF', 26), mk('Andre Ooijer', 'DEF', 32), mk('Martin Olsson', 'DEF', 20),
-    mk('David Dunn', 'MID', 29), mk('Morten Gamst Pedersen', 'MID', 26), mk('Brett Emerton', 'MID', 29), mk('Keith Andrews', 'MID', 27),
+    mk('David Dunn', 'MID', 29), mk('Morten Gamst Pedersen', 'MID', 26), mk('Brett Emerton', 'MID', 29), mk('Keith Andrews', 'MID', 27), mk('Tugay', 'MID', 34),
     mk('Roque Santa Cruz', 'FWD', 27), mk('Jason Roberts', 'FWD', 30), mk('Benni McCarthy', 'FWD', 31),
-    mk('Zurab Khizanishvili', 'DEF', 27),
+    mk('Zurab Khizanishvili', 'DEF', 27), mk('Aaron Mokoena', 'DEF', 28),
   ],
   sunderland: [
     mk('Craig Gordon', 'GK', 25), mk('Marton Fulop', 'GK', 26),
-    mk('Anton Ferdinand', 'DEF', 23), mk('Nyron Nosworthy', 'DEF', 27), mk('Danny Collins', 'DEF', 26), mk('Paul McShane', 'DEF', 23),
-    mk('Steed Malbranque', 'MID', 28), mk('Dean Whitehead', 'MID', 26), mk('Kieran Richardson', 'MID', 23), mk('Andy Reid', 'MID', 26),
+    mk('Anton Ferdinand', 'DEF', 23), mk('Nyron Nosworthy', 'DEF', 27), mk('Danny Collins', 'DEF', 26), mk('Paul McShane', 'DEF', 23), mk('Phil Bardsley', 'DEF', 23),
+    mk('Steed Malbranque', 'MID', 28), mk('Dean Whitehead', 'MID', 26), mk('Kieran Richardson', 'MID', 23), mk('Andy Reid', 'MID', 26), mk('Grant Leadbitter', 'MID', 22),
     mk('Kenwyne Jones', 'FWD', 23), mk('Djibril Cisse', 'FWD', 27), mk('El-Hadji Diouf', 'FWD', 27),
   ],
   hull: [
-    mk('Boaz Myhill', 'GK', 26),
+    mk('Boaz Myhill', 'GK', 26), mk('Matt Duke', 'GK', 30),
     mk('Andy Dawson', 'DEF', 30), mk('Michael Turner', 'DEF', 24), mk('Wayne Brown', 'DEF', 28), mk('Sam Ricketts', 'DEF', 27),
-    mk('Ian Ashbee', 'MID', 31), mk('Geovanni', 'MID', 28), mk('George Boateng', 'MID', 33), mk('Richard Garcia', 'MID', 28),
+    mk('Ian Ashbee', 'MID', 31), mk('Geovanni', 'MID', 28), mk('George Boateng', 'MID', 33), mk('Richard Garcia', 'MID', 28), mk('Bryan Hughes', 'MID', 32),
     mk('Daniel Cousin', 'FWD', 30), mk('Craig Fagan', 'FWD', 27), mk('Caleb Folan', 'FWD', 24),
     mk('Nick Barmby', 'MID', 34),
   ],
@@ -199,8 +200,8 @@ export const REAL_SQUADS_2008_09: Record<string, Player[]> = {
     mk('Fabricio Coloccini', 'DEF', 26), mk('Alan Smith', 'MID', 27),
   ],
   middlesbrough: [
-    mk('Ross Turnbull', 'GK', 23),
-    mk('David Wheater', 'DEF', 21), mk('Chris Riggott', 'DEF', 26), mk('Robert Huth', 'DEF', 24), mk('Justin Hoyte', 'DEF', 24),
+    mk('Ross Turnbull', 'GK', 23), mk('Brad Jones', 'GK', 26),
+    mk('David Wheater', 'DEF', 21), mk('Chris Riggott', 'DEF', 26), mk('Robert Huth', 'DEF', 24), mk('Justin Hoyte', 'DEF', 24), mk('Emanuel Pogatetz', 'DEF', 25),
     mk('Gary O’Neil', 'MID', 25), mk('Julio Arca', 'MID', 27), mk('Didier Digard', 'MID', 21), mk('Adam Johnson', 'MID', 21), mk('Stewart Downing', 'MID', 24),
     mk('Mido', 'FWD', 25), mk('Tuncay Sanli', 'FWD', 25), mk('Afonso Alves', 'FWD', 25),
     mk('Jeremie Aliadiere', 'FWD', 26),

@@ -1449,3 +1449,43 @@ browser (it needs an actual drawn match at the right point in a 46+
 matchday season to occur, impractical to force by clicking through), but
 is covered by the engine-level tests above, which directly exercise the
 same resolution logic the live screen calls into.
+
+## Squad depth pass across all three leagues
+
+User flag: squad depth was the biggest remaining issue. Checked the
+actual numbers — La Liga (12 of 20 clubs) and the Championship (16 of
+24) were sitting at exactly 13 players, barely a bare XI plus a backup
+keeper once injuries/rotation/transfer activity are in play; even the
+Premier League (built up earlier, across prior sessions) still had 4
+clubs at 13-14, with Blackburn/Hull/Middlesbrough down to a single
+recognized keeper.
+
+Bulked up every club below a healthy floor with more real players from
+that season — same confidence caveat the existing "SQUAD DEPTH" sections
+already use (solid for recognizable fringe squad players, lower the
+further down a smaller club's real depth chart memory can go). Target
+was pragmatic, not a fixed number: most Championship/La Liga clubs moved
+from 13 to 14-17, Premier League's thinnest four each gained 1-2
+(including second keepers for Blackburn/Hull/Middlesbrough, closing the
+"only one recognized keeper deep" gap flagged in that file's own
+comments). A couple of the very hardest-to-recall clubs (Numancia,
+Recreativo Huelva) were left alone rather than guess names with no real
+confidence — the existing disclaimer already covers this, it just now
+applies to fewer clubs. Totals: La Liga 13→15.3 average (max still 19,
+min now 13 for 2 clubs instead of 12), Championship 13.6→14.5 average
+(min now 14 for all but Southampton), Premier League 16.2→16.6.
+
+Also fixed one real data bug surfaced while doing this: Joan Capdevila
+(a well-known Spain/Villarreal/Deportivo left-back of that exact era)
+had been misattributed to Recreativo Huelva — moved him to Villarreal,
+his actual 2008/09 club, and a near-miss in the Premier League file
+(Jonny Evans briefly listed at both Manchester United, correctly, and
+Sunderland on loan) was caught by a duplicate-name sweep and fixed by
+swapping in a different real Sunderland full-back (Phil Bardsley)
+instead of trying to model the loan move.
+
+Verification: a programmatic duplicate-name sweep across all three
+squad files (none found after the Jonny Evans fix), full `tsc`/97-test
+suite/`eslint` pass (data-only change, so the count itself didn't move),
+and live confirmation that Villarreal's Team Selection screen now lists
+all 17 players including the newly added ones, with no console errors.
