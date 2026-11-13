@@ -4,6 +4,8 @@ export * from './positionSuitability';
 export * from './teamStrength';
 export * from './matchSimulator';
 export * from './league';
+export * from './matchday';
+export * from './playoffs';
 export * from './squadAuto';
 export * from './ratings';
 export * from './injuries';

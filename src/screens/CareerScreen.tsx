@@ -4,13 +4,36 @@ import { SQUADS_BY_CLUB_ID } from '../data/clubSquads';
 import { DEFAULT_FORMATION_ID, FORMATIONS } from '../data/formations';
 import { ALL_CLUBS, LEAGUES, getLeagueForClub } from '../data/leagues';
 import type { ClubListing } from '../data/premierLeague0809';
-import { applyInjuryUpdates, computeLeagueTable, computeMonthlyPlayerStats, createRandom, generateFixtures, pickBestXI, simulateMatch } from '../engine';
+import {
+  advancePlayoff,
+  applyInjuryUpdates,
+  applyResultToPlayoffFixture,
+  computeLeagueTable,
+  computeMonthlyPlayerStats,
+  createPlayoffState,
+  createRandom,
+  fastForwardPlayoff,
+  generateFixtures,
+  managedClubStillInPlayoff,
+  simulateMatchday,
+  type PlayoffState,
+} from '../engine';
 import type { Fixture, MatchResult, Player, TeamMatchInput } from '../engine/types';
+import {
+  advanceBackgroundLeagueMatchday,
+  createBackgroundLeagueState,
+  fastForwardBackgroundLeagueSeason,
+  isBackgroundLeagueSeasonComplete,
+  type BackgroundLeagueState,
+} from '../utils/backgroundLeague';
+import { computePyramidTransition } from '../utils/pyramid';
 import { FixturesScreen } from './FixturesScreen';
 import { LeagueTableScreen } from './LeagueTableScreen';
 import { MatchAnimationScreen } from './MatchAnimationScreen';
 import { MatchResultScreen } from './MatchResultScreen';
-import { SeasonSummaryScreen } from './SeasonSummaryScreen';
+import { OtherLeaguesScreen } from './OtherLeaguesScreen';
+import { PlayoffScreen } from './PlayoffScreen';
+import { SeasonSummaryScreen, type DivisionOutcome } from './SeasonSummaryScreen';
 import { StatsScreen, type PlayerSeasonTotal } from './StatsScreen';
 import { TeamOfTheMonthScreen } from './TeamOfTheMonthScreen';
 import { TeamSelectionScreen } from './TeamSelectionScreen';
@@ -198,6 +221,13 @@ function getFormation(formationId: string) {
   return FORMATIONS.find((f) => f.id === formationId) ?? FORMATIONS[0];
 }
 
+/** Looks up a fixture by id among a playoff's legs/final — these never live in the main `fixtures` list (see engine/playoffs.ts). */
+function findPlayoffFixture(playoff: PlayoffState | null, fixtureId: string): Fixture | null {
+  if (!playoff) return null;
+  const candidates = [playoff.semiFinal1.leg1, playoff.semiFinal1.leg2, playoff.semiFinal2.leg1, playoff.semiFinal2.leg2, playoff.final];
+  return candidates.find((f): f is Fixture => f !== null && f.id === fixtureId) ?? null;
+}
+
 function computeSeasonStats(fixtures: Fixture[]): PlayerSeasonTotal[] {
   const totals = new Map<string, PlayerSeasonTotal>();
 
@@ -295,6 +325,8 @@ interface LiveMatchSetup {
   matchday: number;
   playedPlayerIdsByClub: Record<string, string[]>;
   seedAfterOtherFixtures: number;
+  /** True for a Championship promotion playoff leg/final — its result commits into `managedPlayoff` instead of the regular `fixtures` list, and doesn't touch the career-level `nextSeed` (the playoff tracks its own). */
+  isPlayoffMatch?: boolean;
 }
 
 /**
@@ -320,14 +352,27 @@ export function CareerScreen({
 }) {
   const resume = initialSave && initialSave.clubId === club.id ? initialSave : undefined;
 
-  // Which league this club belongs to — drives the club list this season
-  // is played within (fixtures, table, transfers all stay inside it) and
-  // the season length (a league with fewer clubs plays fewer matchdays).
-  // Falls back to the first registered league only as a defensive
-  // fallback; every real club here was picked from LEAGUES in the first
-  // place, so getLeagueForClub should never actually miss.
-  const league = getLeagueForClub(club.id) ?? LEAGUES[0];
-  const ALL_CLUB_IDS = useMemo(() => league.clubs.map((c) => c.id), [league]);
+  // Which clubs currently make up each league — starts as the static
+  // registry (src/data/leagues.ts) but is career-local state from here on,
+  // because promotion/relegation (see utils/pyramid.ts) can move clubs
+  // between the Premier League and the Championship season to season. A
+  // fresh career always starts from the static rosters; a resumed one
+  // carries forward whatever last season's promotion/relegation produced.
+  const [leagueClubIds, setLeagueClubIds] = useState<Record<string, string[]>>(
+    () => resume?.leagueClubIds ?? Object.fromEntries(LEAGUES.map((l) => [l.id, l.clubs.map((c) => c.id)])),
+  );
+
+  // Which league the managed club is CURRENTLY in — derived from
+  // leagueClubIds (not the static getLeagueForClub) so that a club that
+  // got promoted/relegated last season is correctly found in its new
+  // division. The static lookup is only a defensive fallback for the
+  // (should-never-happen) case where the club isn't in any tracked list.
+  const managedLeagueId = useMemo(
+    () => Object.entries(leagueClubIds).find(([, ids]) => ids.includes(club.id))?.[0] ?? getLeagueForClub(club.id)?.id ?? LEAGUES[0].id,
+    [leagueClubIds, club.id],
+  );
+  const league = LEAGUES.find((l) => l.id === managedLeagueId) ?? LEAGUES[0]; // name/tier/logo are static — only roster membership moves
+  const ALL_CLUB_IDS = leagueClubIds[managedLeagueId] ?? league.clubs.map((c) => c.id);
   const totalMatchdays = (ALL_CLUB_IDS.length - 1) * 2;
   // Fixtures aren't dated, just numbered 1-N — this is an approximate
   // "roughly halfway through the season" marker, not a real calendar.
@@ -361,6 +406,24 @@ export function CareerScreen({
   // replaying that one fixture fresh rather than resurrecting a half-played
   // match, which isn't worth the complexity of serializing.
   const [liveMatch, setLiveMatch] = useState<LiveMatchSetup | null>(null);
+
+  // Every league other than the one being managed, simulating its own
+  // season fully automatically alongside this one (see
+  // utils/backgroundLeague.ts) — this is what "the leagues run alongside
+  // one another" actually is. Rebuilt (not just resumed as-is) whenever
+  // the managed league itself changes, since promotion/relegation can
+  // swap which two leagues count as "other."
+  const [backgroundLeagues, setBackgroundLeagues] = useState<BackgroundLeagueState[]>(
+    () => resume?.backgroundLeagues ?? LEAGUES.filter((l) => l.id !== managedLeagueId).map((l) =>
+      createBackgroundLeagueState(l.id, leagueClubIds[l.id] ?? l.clubs.map((c) => c.id), Math.floor(Math.random() * 1_000_000) + 1),
+    ),
+  );
+
+  // Only ever populated for a tier:'second' (Championship) career, once
+  // its regular season ends — the real promotion playoff (see
+  // engine/playoffs.ts). null the rest of the time, including for every
+  // top-tier career.
+  const [managedPlayoff, setManagedPlayoff] = useState<PlayoffState | null>(resume?.managedPlayoff ?? null);
 
   // Per-career mutable squads (starts as a copy of the shared static data) so
   // transfer-window swaps only affect this playthrough, not the app-wide
@@ -401,6 +464,9 @@ export function CareerScreen({
     saveCareer({
       clubId: club.id,
       leagueId: league.id,
+      leagueClubIds,
+      backgroundLeagues,
+      managedPlayoff,
       managerName,
       screen,
       formationId,
@@ -418,6 +484,9 @@ export function CareerScreen({
   }, [
     club.id,
     league.id,
+    leagueClubIds,
+    backgroundLeagues,
+    managedPlayoff,
     managerName,
     screen,
     formationId,
@@ -437,9 +506,58 @@ export function CareerScreen({
   const table = useMemo(() => computeLeagueTable(ALL_CLUB_IDS, fixtures), [ALL_CLUB_IDS, fixtures]);
   const leagueSeasonTotals = useMemo(() => computeSeasonStats(fixtures), [fixtures]);
   const topScorers = useMemo(() => leagueSeasonTotals.slice(0, 20), [leagueSeasonTotals]);
-  const lastFixture = lastPlayedFixtureId ? fixtures.find((f) => f.id === lastPlayedFixtureId) ?? null : null;
+  // A playoff fixture's id never appears in `fixtures` (deliberately kept
+  // separate — see engine/playoffs.ts), so this also checks managedPlayoff
+  // for it, letting the same MatchResultScreen/live-match overlay logic
+  // below handle both a regular fixture and a playoff leg/final uniformly.
+  const lastFixture = lastPlayedFixtureId
+    ? fixtures.find((f) => f.id === lastPlayedFixtureId) ?? findPlayoffFixture(managedPlayoff, lastPlayedFixtureId)
+    : null;
   const leaguePosition = table.findIndex((r) => r.clubId === club.id) + 1;
-  const seasonComplete = fixtures.length > 0 && fixtures.every((f) => f.played);
+  const regularSeasonComplete = fixtures.length > 0 && fixtures.every((f) => f.played);
+  // The Championship isn't actually done until its promotion playoff is
+  // resolved too — every top-tier league finishes the moment its regular
+  // season does, same as before this feature.
+  const fullSeasonComplete = regularSeasonComplete && (league.tier !== 'second' || managedPlayoff?.championClubId != null);
+
+  // The real promotion/relegation result for SeasonSummaryScreen, when
+  // one applies — only the Premier League and Championship are linked by
+  // the pyramid (see utils/pyramid.ts); La Liga and the Championship's
+  // own relegation zone (no League One modeled) stay null, which the
+  // screen shows with its older "not modeled yet" wording instead.
+  const divisionOutcome: DivisionOutcome | null = !fullSeasonComplete
+    ? null
+    : managedLeagueId === 'championship' && managedPlayoff
+      ? (() => {
+          if (leaguePosition <= 2) return 'promoted-automatic';
+          const inSemiFinal1 = managedPlayoff.semiFinal1.higherSeedClubId === club.id || managedPlayoff.semiFinal1.lowerSeedClubId === club.id;
+          const inSemiFinal2 = managedPlayoff.semiFinal2.higherSeedClubId === club.id || managedPlayoff.semiFinal2.lowerSeedClubId === club.id;
+          if (!inSemiFinal1 && !inSemiFinal2) return null; // finished 7th or lower — never in the playoff
+          if (managedPlayoff.championClubId === club.id) return 'promoted-playoff';
+          const wonSemiFinal = (inSemiFinal1 && managedPlayoff.semiFinal1Winner === club.id) || (inSemiFinal2 && managedPlayoff.semiFinal2Winner === club.id);
+          return wonSemiFinal ? 'lost-playoff-final' : 'lost-playoff-semifinal';
+        })()
+      : managedLeagueId === 'premier-league' && leaguePosition > ALL_CLUB_IDS.length - 3
+        ? 'relegated-real'
+        : null;
+
+  // Seeds the real Championship promotion playoff the moment the regular
+  // season ends, then — once the managed club is no longer in it
+  // (finished mid-table and was never in the bracket, or lost a semi) —
+  // resolves the rest of it in one go, same as a background league's own
+  // playoff, so the player isn't made to click through fixtures they
+  // have no stake in.
+  useEffect(() => {
+    if (!regularSeasonComplete || league.tier !== 'second') return;
+    if (!managedPlayoff) {
+      setManagedPlayoff(createPlayoffState(table, totalMatchdays + 1, Math.floor(Math.random() * 1_000_000) + 1));
+      return;
+    }
+    if (managedPlayoff.championClubId) return;
+    if (!managedClubStillInPlayoff(managedPlayoff, club.id)) {
+      setManagedPlayoff(fastForwardPlayoff(managedPlayoff, allSquads, (id) => ALL_CLUBS.find((c) => c.id === id), AI_FORMATION));
+    }
+  }, [regularSeasonComplete, league.tier, managedPlayoff, table, totalMatchdays, club.id, allSquads]);
 
   const allPlayerIndex = useMemo(() => {
     const map = new Map<string, { player: Player; clubId: string }>();
@@ -456,10 +574,22 @@ export function CareerScreen({
     return new Map(stats.map((s) => [s.playerId, s]));
   }, [fixtures, club.id, allPlayerIndex, totalMatchdays]);
 
-  function openTransferWindow(which: 'preseason' | 'january') {
-    const { updatedSquads, news } = simulateLeagueTransferActivity(allSquads, ALL_CLUB_IDS, club.id, 5);
-    const rumours = simulateLeagueRumours(updatedSquads, ALL_CLUB_IDS, club.id, 4);
-    const offers = generateTransferOffers(club.id, ALL_CLUB_IDS, updatedSquads, new Set(selectedXI));
+  /**
+   * `overrideClubIds`/`overrideSquads` exist for one reason: at the start
+   * of a new season after a promotion/relegation move, the managed
+   * club's new league's club list and the just-fast-forwarded background
+   * squads aren't reflected in `ALL_CLUB_IDS`/`allSquads` yet (state
+   * updates triggered earlier in the same `startNewSeason` call haven't
+   * re-rendered), so the opening preseason window would otherwise use
+   * last season's division. The January window call site never needs
+   * these — the managed league never changes mid-season.
+   */
+  function openTransferWindow(which: 'preseason' | 'january', overrideClubIds?: string[], overrideSquads?: Record<string, Player[]>) {
+    const clubIds = overrideClubIds ?? ALL_CLUB_IDS;
+    const squads = overrideSquads ?? allSquads;
+    const { updatedSquads, news } = simulateLeagueTransferActivity(squads, clubIds, club.id, 5);
+    const rumours = simulateLeagueRumours(updatedSquads, clubIds, club.id, 4);
+    const offers = generateTransferOffers(club.id, clubIds, updatedSquads, new Set(selectedXI));
     const combinedNews = [...news.map((n) => ({ ...n, confirmed: true })), ...rumours.map((r) => ({ ...r, confirmed: false }))];
     setAllSquads(updatedSquads);
     setTransferOffers(offers);
@@ -492,6 +622,18 @@ export function CareerScreen({
     setTransferOffers((prev) => prev.map((o) => (o.id === offerId ? { ...o, status: 'declined' } : o)));
   }
 
+  /** Advances every OTHER league by exactly one matchday too — this is what "the leagues run alongside one another" actually is. Combines every league's squad writes into the one returned map so the caller issues a single setAllSquads, not one per league. */
+  function advanceBackgroundLeaguesOnce(squadsBase: Record<string, Player[]>): Record<string, Player[]> {
+    let squadsAcc = squadsBase;
+    const nextBackgroundLeagues = backgroundLeagues.map((bg) => {
+      const { nextState, updatedAllSquads } = advanceBackgroundLeagueMatchday(bg, squadsAcc);
+      squadsAcc = updatedAllSquads;
+      return nextState;
+    });
+    setBackgroundLeagues(nextBackgroundLeagues);
+    return squadsAcc;
+  }
+
   function playNextFixture() {
     const unplayed = fixtures.filter((f) => !f.played);
     if (unplayed.length === 0) return;
@@ -509,70 +651,36 @@ export function CareerScreen({
     const formation = getFormation(formationId);
     const managedXI = liveSquad.filter((p) => selectedXI.includes(p.id));
 
-    let seed = nextSeed;
-    const resultsByFixtureId = new Map<string, ReturnType<typeof simulateMatch>>();
-    const playedPlayerIdsByClub: Record<string, string[]> = {};
-    let pendingLiveMatch: LiveMatchSetup | null = null;
-
-    for (const fixture of fixturesThisMatchday) {
-      const isManagedHome = fixture.homeClubId === club.id;
-      const isManagedAway = fixture.awayClubId === club.id;
-
-      const homeListing = ALL_CLUBS.find((c) => c.id === fixture.homeClubId);
-      const awayListing = ALL_CLUBS.find((c) => c.id === fixture.awayClubId);
-      const homeSquad = isManagedHome ? liveSquad : allSquads[fixture.homeClubId];
-      const awaySquad = isManagedAway ? liveSquad : allSquads[fixture.awayClubId];
-      if (!homeListing || !awayListing || !homeSquad || !awaySquad) continue;
-
-      const homeClubForEngine = { id: homeListing.id, name: homeListing.name, shortName: homeListing.shortName, colors: { primary: homeListing.primaryColor, secondary: homeListing.secondaryColor }, reputation: 70, players: homeSquad };
-      const awayClubForEngine = { id: awayListing.id, name: awayListing.name, shortName: awayListing.shortName, colors: { primary: awayListing.primaryColor, secondary: awayListing.secondaryColor }, reputation: 70, players: awaySquad };
-
-      const homeInput = isManagedHome
-        ? { club: homeClubForEngine, formation, selectedXI: managedXI }
-        : { club: homeClubForEngine, formation: AI_FORMATION, selectedXI: pickBestXI(homeClubForEngine, AI_FORMATION) };
-      const awayInput = isManagedAway
-        ? { club: awayClubForEngine, formation, selectedXI: managedXI }
-        : { club: awayClubForEngine, formation: AI_FORMATION, selectedXI: pickBestXI(awayClubForEngine, AI_FORMATION) };
-
-      if (isManagedHome || isManagedAway) {
-        // Deferred, not simulated here — the live match screen runs this
-        // one itself (createMatchSimulation), pausing at half time so a
-        // substitution can actually change who's on the pitch for the
-        // second half. Still reserves this fixture's seed slot in the same
-        // sequence as every other match, so the rest of the league's
-        // results don't shift depending on what you do in your own match.
-        pendingLiveMatch = {
-          fixtureId: fixture.id,
-          homeInput,
-          awayInput,
-          seed,
-          managedSide: isManagedHome ? 'home' : 'away',
-          managedBench: liveSquad.filter((p) => !selectedXI.includes(p.id) && !p.injured),
-          matchday,
-          playedPlayerIdsByClub: { ...playedPlayerIdsByClub },
-          seedAfterOtherFixtures: NaN, // filled in once every fixture's seed slot is reserved
-        };
-        seed += 1;
-        continue;
-      }
-
-      const result = simulateMatch({ fixtureId: fixture.id, home: homeInput, away: awayInput, seed });
-      seed += 1;
-      resultsByFixtureId.set(fixture.id, result);
-      playedPlayerIdsByClub[fixture.homeClubId] = result.homeXI;
-      playedPlayerIdsByClub[fixture.awayClubId] = result.awayXI;
-    }
+    const { resultsByFixtureId, playedPlayerIdsByClub, deferred, nextSeed: seedAfterOtherFixtures } = simulateMatchday({
+      fixtures: fixturesThisMatchday,
+      seed: nextSeed,
+      clubListingOf: (id) => ALL_CLUBS.find((c) => c.id === id),
+      squadOf: (id) => (id === club.id ? liveSquad : allSquads[id]),
+      aiFormation: AI_FORMATION,
+      managedOverride: { clubId: club.id, formation, selectedXI: managedXI },
+    });
 
     setFixtures((prev) => prev.map((f) => {
       const result = resultsByFixtureId.get(f.id);
       return result ? { ...f, played: true, result } : f;
     }));
 
-    if (pendingLiveMatch) {
-      pendingLiveMatch.seedAfterOtherFixtures = seed;
-      setLiveMatch(pendingLiveMatch);
-      setLastPlayedFixtureId(pendingLiveMatch.fixtureId);
+    if (deferred) {
+      // Deferred, not simulated above — the live match screen runs this
+      // one itself (createMatchSimulation), pausing at half time so a
+      // substitution can actually change who's on the pitch for the
+      // second half. Its seed slot is already reserved in sequence, so
+      // the rest of the matchday's results don't shift depending on what
+      // happens in the live match.
+      setLiveMatch({
+        ...deferred,
+        managedBench: liveSquad.filter((p) => !selectedXI.includes(p.id) && !p.injured),
+        playedPlayerIdsByClub,
+        seedAfterOtherFixtures,
+      });
+      setLastPlayedFixtureId(deferred.fixtureId);
       setShowingAnimation(true);
+      setAllSquads(advanceBackgroundLeaguesOnce(allSquads));
       // nextSeed, injuries, and XI-fitness all finish once the live match
       // reports its result back — see handleManagedMatchFinished.
       return;
@@ -580,10 +688,10 @@ export function CareerScreen({
 
     // No managed fixture this matchday (every club always has one in a
     // full round-robin season, but fall back safely rather than assume it).
-    const injuryRandom = createRandom(seed);
-    seed += 1;
+    const injuryRandom = createRandom(seedAfterOtherFixtures);
+    const seed = seedAfterOtherFixtures + 1;
     const updatedAllSquads = applyInjuryUpdates(allSquads, matchday, playedPlayerIdsByClub, injuryRandom);
-    setAllSquads(updatedAllSquads);
+    setAllSquads(advanceBackgroundLeaguesOnce(updatedAllSquads));
     const stillFitIds = new Set((updatedAllSquads[club.id] ?? []).filter((p) => !p.injured).map((p) => p.id));
     setSelectedXI((prev) => prev.filter((id) => stillFitIds.has(id)));
     setNextSeed(seed);
@@ -592,6 +700,16 @@ export function CareerScreen({
   /** Called once the live match screen finishes the managed fixture (after any half-time substitutions) — commits its result and finally runs the injury pass for the whole matchday. */
   function handleManagedMatchFinished(result: MatchResult) {
     if (!liveMatch) return;
+
+    if (liveMatch.isPlayoffMatch) {
+      // Playoff fixtures don't roll injuries (see engine/playoffs.ts) and
+      // have their own independent seed stream inside managedPlayoff
+      // itself — nothing here touches allSquads or the career's nextSeed.
+      if (managedPlayoff) setManagedPlayoff(applyResultToPlayoffFixture(managedPlayoff, liveMatch.fixtureId, result));
+      setLiveMatch(null);
+      return;
+    }
+
     const fixture = fixtures.find((f) => f.id === liveMatch.fixtureId);
     if (!fixture) {
       setLiveMatch(null);
@@ -623,15 +741,98 @@ export function CareerScreen({
     setLiveMatch(null);
   }
 
-  /** Fresh fixture list for the same 20 clubs; squads (and any transfers made) carry over. No promotion/relegation between divisions — see SeasonSummaryScreen. */
+  /** One step of the managed club's own Championship playoff bracket — mirrors playNextFixture, just against managedPlayoff instead of the regular fixtures list. */
+  function advanceManagedPlayoff() {
+    if (!managedPlayoff || managedPlayoff.championClubId) return;
+    const formation = getFormation(formationId);
+    const managedXI = liveSquad.filter((p) => selectedXI.includes(p.id));
+
+    const { nextPlayoff, deferred } = advancePlayoff(
+      managedPlayoff,
+      allSquads,
+      (id) => ALL_CLUBS.find((c) => c.id === id),
+      AI_FORMATION,
+      { clubId: club.id, formation, selectedXI: managedXI },
+    );
+    setManagedPlayoff(nextPlayoff);
+
+    if (deferred) {
+      setLiveMatch({
+        fixtureId: deferred.fixtureId,
+        homeInput: deferred.homeInput,
+        awayInput: deferred.awayInput,
+        seed: deferred.seed,
+        managedSide: deferred.managedSide,
+        managedBench: liveSquad.filter((p) => !selectedXI.includes(p.id) && !p.injured),
+        matchday: deferred.matchday,
+        playedPlayerIdsByClub: {},
+        seedAfterOtherFixtures: nextPlayoff.nextSeed,
+        isPlayoffMatch: true,
+      });
+      setLastPlayedFixtureId(deferred.fixtureId);
+      setShowingAnimation(true);
+    }
+  }
+
+  /**
+   * A new season for the managed league's CURRENT club list — which, for
+   * the Premier League or Championship, may have just changed: real
+   * promotion/relegation (see utils/pyramid.ts) swaps the Premier
+   * League's bottom 3 with the Championship's top 2 plus this season's
+   * promotion playoff winner. La Liga never participates in that swap.
+   * Every other league gets fast-forwarded to its own completion first
+   * (it may be mid-season still, e.g. a shorter-season top-tier career
+   * finishing before the 46-matchday Championship does) so a full,
+   * resolved picture is ready before anything is computed. Squads (and
+   * any transfers made) carry over regardless of which division a club
+   * ends up in.
+   */
   function startNewSeason() {
-    setFixtures(generateFixtures(ALL_CLUB_IDS));
+    let squadsAcc = allSquads;
+    const resolvedOtherLeagues = backgroundLeagues.map((bg) => {
+      if (isBackgroundLeagueSeasonComplete(bg)) return bg;
+      const { nextState, updatedAllSquads } = fastForwardBackgroundLeagueSeason(bg, squadsAcc);
+      squadsAcc = updatedAllSquads;
+      return nextState;
+    });
+
+    function outcomeFor(leagueId: string): { clubIds: string[]; table: ReturnType<typeof computeLeagueTable>; playoffWinnerClubId?: string } {
+      if (leagueId === managedLeagueId) {
+        return { clubIds: ALL_CLUB_IDS, table, playoffWinnerClubId: managedPlayoff?.championClubId ?? undefined };
+      }
+      const bg = resolvedOtherLeagues.find((b) => b.leagueId === leagueId)!;
+      return { clubIds: bg.clubIds, table: computeLeagueTable(bg.clubIds, bg.fixtures), playoffWinnerClubId: bg.playoff?.championClubId ?? undefined };
+    }
+
+    let nextLeagueClubIds = leagueClubIds;
+    if (managedLeagueId === 'premier-league' || managedLeagueId === 'championship') {
+      const pl = outcomeFor('premier-league');
+      const champ = outcomeFor('championship');
+      if (champ.playoffWinnerClubId) {
+        const { nextPremierLeagueClubIds, nextChampionshipClubIds } = computePyramidTransition(pl.clubIds, champ.clubIds, pl.table, champ.table, champ.playoffWinnerClubId);
+        nextLeagueClubIds = { ...leagueClubIds, 'premier-league': nextPremierLeagueClubIds, championship: nextChampionshipClubIds };
+      }
+    }
+
+    const nextManagedLeagueId = Object.entries(nextLeagueClubIds).find(([, ids]) => ids.includes(club.id))?.[0] ?? managedLeagueId;
+    const nextManagedClubIds = nextLeagueClubIds[nextManagedLeagueId] ?? ALL_CLUB_IDS;
+
+    setLeagueClubIds(nextLeagueClubIds);
+    setAllSquads(squadsAcc);
+    setBackgroundLeagues(
+      LEAGUES.filter((l) => l.id !== nextManagedLeagueId).map((l) => {
+        const ids = nextLeagueClubIds[l.id] ?? l.clubs.map((c) => c.id);
+        return createBackgroundLeagueState(l.id, ids, Math.floor(Math.random() * 1_000_000) + 1);
+      }),
+    );
+    setManagedPlayoff(null);
+    setFixtures(generateFixtures(nextManagedClubIds));
     setNextSeed(Math.floor(Math.random() * 1_000_000) + 1);
     setLastPlayedFixtureId(null);
     setShowingAnimation(false);
     setJanuaryWindowShown(false);
     setSeasonSummaryDismissed(false);
-    openTransferWindow('preseason');
+    openTransferWindow('preseason', nextManagedClubIds, squadsAcc);
   }
 
   // Overlay content (transfer window / match animation / match result) renders
@@ -682,7 +883,9 @@ export function CareerScreen({
         />
       );
     }
-  } else if (seasonComplete && !seasonSummaryDismissed) {
+  } else if (managedPlayoff && !managedPlayoff.championClubId && managedClubStillInPlayoff(managedPlayoff, club.id)) {
+    overlay = <PlayoffScreen playoff={managedPlayoff} onPlayNext={advanceManagedPlayoff} />;
+  } else if (fullSeasonComplete && !seasonSummaryDismissed) {
     overlay = (
       <SeasonSummaryScreen
         club={club}
@@ -691,6 +894,7 @@ export function CareerScreen({
         leagueRow={table.find((r) => r.clubId === club.id)}
         leaguePosition={leaguePosition}
         totalClubs={ALL_CLUB_IDS.length}
+        divisionOutcome={divisionOutcome}
         topScorers={topScorers}
         fixtures={fixtures}
         allSquads={allSquads}
@@ -738,7 +942,7 @@ export function CareerScreen({
           totalMatchdays={totalMatchdays}
           xiReady={selectedXI.length === 11}
           onPlayNext={playNextFixture}
-          onViewSeasonSummary={seasonComplete ? () => setSeasonSummaryDismissed(false) : undefined}
+          onViewSeasonSummary={fullSeasonComplete ? () => setSeasonSummaryDismissed(false) : undefined}
           onViewTeamOfTheMonth={() => setScreen('totm')}
           onGoToTeamSelection={() => setScreen('team')}
         />
@@ -749,6 +953,8 @@ export function CareerScreen({
       {screen === 'stats' && <StatsScreen stats={leagueSeasonTotals} managedClubId={club.id} />}
 
       {screen === 'totm' && <TeamOfTheMonthScreen fixtures={fixtures} totalMatchdays={totalMatchdays} allSquads={allSquads} managedClubId={club.id} />}
+
+      {screen === 'otherLeagues' && <OtherLeaguesScreen backgroundLeagues={backgroundLeagues} allSquads={allSquads} />}
 
       {overlay && <div className="fixed inset-0 z-50 overflow-y-auto bg-pitch">{overlay}</div>}
     </div>

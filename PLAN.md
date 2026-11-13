@@ -1290,3 +1290,86 @@ show Automatic Promotion (emerald) / Promotion Playoffs (teal) /
 Relegation (red), with correct banding (1-2 / 3-6 / bottom-3 of 24); a
 Premier League career is unaffected (still Champions League (blue) /
 Europa (orange) / Relegation (red), 1-4 / 5-6 / bottom-3 of 20).
+
+## Parallel leagues + real Championship promotion/relegation
+
+User request: run every league alongside the managed one during a
+career, and give the Championship a real promotion playoff that
+actually confirms a 3rd promoted club. Planned as one piece (see the
+plan file this session worked from) since it touches the save format,
+the core matchday-simulation loop, and a brand new playoff engine.
+
+**Background leagues.** Every league other than the one being managed
+now plays out its own season fully automatically in the background —
+own fixtures, own independent RNG seed stream — advancing by exactly one
+matchday every time the player advances their own (`CareerScreen`'s
+`backgroundLeagues` state, driven by the new `utils/backgroundLeague.ts`:
+`advanceBackgroundLeagueMatchday` for the per-click case,
+`fastForwardBackgroundLeagueSeason` to catch a league up to its own
+completion in one go, used when starting a new season and some other
+league — typically the 46-matchday Championship, if it's not the one
+being managed — hasn't finished yet). A new "Other Leagues" tab
+(`OtherLeaguesScreen.tsx`, reusing the existing `LeagueTableScreen` as-is
+with `managedClubId=""`) lets you check in on them. The AI-vs-AI
+matchday loop itself (auto-picking a best XI for every non-managed club,
+simulating every fixture except the one actually being managed live) was
+extracted from `playNextFixture` into a standalone `simulateMatchday`
+(`engine/matchday.ts`) so both the managed league and every background
+league share the exact same simulation code — a background league's
+fixtures simply never contain the managed club's id, so the "defer this
+one to the live screen" branch never activates for them; no special
+casing needed anywhere.
+
+**The Championship playoff** (`engine/playoffs.ts`): the real EFL
+format — 3rd-v-6th and 4th-v-5th play two-legged semis (home and away,
+aggregate score decides), then the two winners play a single final. If
+an aggregate (or the final) is level, there's no away-goals or penalty
+concept anywhere in this engine, so a one-off "decider" match stands in
+(simulated with no home advantage), and if even THAT is level, a single
+team-strength-weighted coin flip — a deliberate, transparent
+simplification for penalties, flagged the same way `cardWeight`/the GK
+booking fix are in `matchSimulator.ts`. Playoff fixtures are kept in
+their own structure, never merged into the Championship's real 46-fixture
+list, so the league table itself is never contaminated by them. A
+managed Championship club that's still alive in the bracket gets a new
+`PlayoffScreen` (mirrors `FixturesScreen`'s "Play Next Fixture" pattern)
+and plays its own legs live, exactly like a normal fixture; once
+eliminated (or never in the bracket at all, finishing 7th or lower), the
+rest resolves itself automatically, same as a background league's own
+playoff — nobody's made to click through games they have no stake in.
+
+**Real promotion/relegation** (`utils/pyramid.ts`'s
+`computePyramidTransition`): the Premier League's bottom 3 (its own
+`getLeagueZone` relegation band) swap with the Championship's top 2 plus
+the playoff winner, applied in `startNewSeason()`. Club↔league membership
+had to stop being static global data and become a per-career,
+stateful `leagueClubIds` map (`CareerSaveData` gained this, plus
+`backgroundLeagues` and `managedPlayoff` — all optional, so old saves
+load fine and just start from the static rosters) — the managed club's
+own division for the next season simply falls out of this once it
+changes, no special handling needed for "I got promoted" vs "I got
+relegated" vs "nothing changed." La Liga has no pyramid relationship to
+either English division and is permanently excluded from this swap — it
+only ever runs in parallel for flavor. `SeasonSummaryScreen` shows the
+real outcome (promoted automatically / via the play-offs / lost in the
+semi-final or final / relegated) for Premier League and Championship
+careers; La Liga, and the Championship's own relegation zone (there's no
+League One modeled, so those 3 clubs just stay in the Championship next
+season), keep the older "not modeled yet" wording.
+
+New unit tests: `engine/__tests__/matchday.test.ts`,
+`engine/__tests__/playoffs.test.ts`, `utils/__tests__/pyramid.test.ts`
+(cross-checked directly against `getLeagueZone` so the two can't drift
+apart), `utils/__tests__/backgroundLeague.test.ts` (fast-forwards a real
+20-club top-tier league and the real 24-club Championship, including its
+playoff, using the actual game data — not just synthetic fixtures).
+Verified live: Other Leagues advances in exact lockstep with the managed
+league (1 matchday per click, confirmed cleanly for both a Premier
+League and a Championship career); save/reload round-trips the new
+fields with no console errors; a Championship managed career correctly
+lists Premier League/La Liga as its background leagues. A full
+38-to-46-matchday season wasn't played through live in the browser (too
+slow to click through end to end) — that path is covered instead by the
+unit tests above, which exercise the real pyramid-transition and
+playoff-resolution logic against the actual league data, not a
+simplified stand-in.

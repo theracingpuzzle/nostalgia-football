@@ -5,7 +5,7 @@ import { getLeagueZone, ordinal, ZONE_STYLES } from '../../utils/leagueZones';
 import type { ClubListing } from '../../data/premierLeague0809';
 import type { LeagueDefinition } from '../../data/leagues';
 
-export type CareerScreenId = 'team' | 'fixtures' | 'table' | 'stats' | 'totm';
+export type CareerScreenId = 'team' | 'fixtures' | 'table' | 'stats' | 'totm' | 'otherLeagues';
 
 const NAV_ITEMS: { screen: CareerScreenId; label: string }[] = [
   { screen: 'team', label: 'Team Selection' },
@@ -13,6 +13,7 @@ const NAV_ITEMS: { screen: CareerScreenId; label: string }[] = [
   { screen: 'table', label: 'Table' },
   { screen: 'stats', label: 'Stats' },
   { screen: 'totm', label: 'TOTM' },
+  { screen: 'otherLeagues', label: 'Other Leagues' },
 ];
 
 /** Nav buttons, shared between the desktop row and the mobile dropdown — same markup, different layout wrapper. */

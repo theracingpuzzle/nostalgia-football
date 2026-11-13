@@ -22,11 +22,34 @@ const HEADLINES: Record<'champion' | 'champions' | 'europa' | 'promotion' | 'pla
 };
 
 /**
+ * A real division-crossing outcome (only ever set for the Premier
+ * League/Championship — see CareerScreen's computeDivisionOutcome and
+ * utils/pyramid.ts). When present, this overrides the zone-based
+ * headline above with what actually happened, since `getLeagueZone`
+ * only ever reflects REGULAR-SEASON position — a Championship club in
+ * the playoff zone might have gone on to win it or get knocked out,
+ * which the zone alone can't say.
+ */
+export type DivisionOutcome = 'promoted-automatic' | 'promoted-playoff' | 'lost-playoff-semifinal' | 'lost-playoff-final' | 'relegated-real';
+
+const DIVISION_OUTCOME_HEADLINES: Record<DivisionOutcome, { title: string; tone: string; subtitle: string }> = {
+  'promoted-automatic': { title: '🏆 Promoted!', tone: 'bg-emerald-600 text-white border-emerald-800', subtitle: 'Automatic promotion — see you in the Premier League.' },
+  'promoted-playoff': { title: '🏆 Promoted!', tone: 'bg-emerald-600 text-white border-emerald-800', subtitle: 'Promotion playoff final winners — see you in the Premier League.' },
+  'lost-playoff-semifinal': { title: 'Play-off heartbreak', tone: 'bg-ink/80 text-white border-ink', subtitle: 'Lost in the promotion playoff semi-final — back to the Championship next season.' },
+  'lost-playoff-final': { title: 'So close', tone: 'bg-ink/80 text-white border-ink', subtitle: 'Lost the promotion playoff final at the last hurdle.' },
+  'relegated-real': { title: 'Relegated', tone: 'bg-red-700 text-white border-red-900', subtitle: 'Down to the Championship next season.' },
+};
+
+/**
  * End-of-season recap — a new addition (the original's actual end-of-season
  * screen, if it had one, isn't confirmed/known, see PLAN.md). Shows the final
  * finish, top scorers, a season-long Team of the Season, and a button to
- * kick off a fresh season with the same 20 clubs (there's no promotion/
- * relegation between divisions modeled — see the note below when relegated).
+ * kick off a fresh season. Real promotion/relegation between the Premier
+ * League and the Championship is modeled (see CareerScreen/utils/pyramid.ts)
+ * — `divisionOutcome` carries the actual result when one applies. La Liga
+ * has no pyramid to move within, and the Championship's own relegation
+ * zone has nowhere to actually go (no League One here), so both of those
+ * still show the older "not modeled yet" disclaimer.
  */
 export function SeasonSummaryScreen({
   club,
@@ -35,6 +58,7 @@ export function SeasonSummaryScreen({
   leagueRow,
   leaguePosition,
   totalClubs,
+  divisionOutcome,
   topScorers,
   fixtures,
   allSquads,
@@ -47,6 +71,8 @@ export function SeasonSummaryScreen({
   leagueRow: LeagueTableRow | undefined;
   leaguePosition: number;
   totalClubs: number;
+  /** The real promotion/relegation result, when one applies (Premier League/Championship only — see CareerScreen). null for every other case, including La Liga, which has no division to move to/from. */
+  divisionOutcome: DivisionOutcome | null;
   topScorers: PlayerSeasonTotal[];
   fixtures: Fixture[];
   allSquads: Record<string, Player[]>;
@@ -55,8 +81,16 @@ export function SeasonSummaryScreen({
 }) {
   const zone = getLeagueZone(leaguePosition, totalClubs, leagueTier);
   const headlineKey = leaguePosition === 1 ? 'champion' : zone ?? 'mid';
-  const headline = HEADLINES[headlineKey];
-  const movesDivision = headlineKey === 'relegation' || headlineKey === 'promotion' || headlineKey === 'playoff' || (headlineKey === 'champion' && leagueTier === 'second');
+  const zoneHeadline = HEADLINES[headlineKey];
+  const outcomeHeadline = divisionOutcome ? DIVISION_OUTCOME_HEADLINES[divisionOutcome] : null;
+  const headline = outcomeHeadline ?? zoneHeadline;
+  // A real outcome always comes with its own subtitle explaining what
+  // happens next (see DIVISION_OUTCOME_HEADLINES); short of that, fall
+  // back to the old disclaimer for every case that WOULD move a club
+  // between divisions if that were modeled yet — Championship's own
+  // relegation zone (there's no League One here) and every La Liga zone.
+  const movesDivisionButNotModeled =
+    !outcomeHeadline && (headlineKey === 'relegation' || headlineKey === 'promotion' || headlineKey === 'playoff' || (headlineKey === 'champion' && leagueTier === 'second'));
 
   const playerIndex = useMemo(() => {
     const map = new Map<string, { player: Player; clubId: string }>();
@@ -82,7 +116,8 @@ export function SeasonSummaryScreen({
         <span className="text-sm font-semibold">
           {club.name} finished {ordinal(leaguePosition)} of {totalClubs}
         </span>
-        {movesDivision && (
+        {outcomeHeadline && <span className="text-sm font-semibold">{outcomeHeadline.subtitle}</span>}
+        {movesDivisionButNotModeled && (
           <span className="text-xs italic opacity-80">
             (Promotion/relegation between divisions isn't modeled yet — next season starts back in the same {totalClubs}-club {leagueName}.)
           </span>

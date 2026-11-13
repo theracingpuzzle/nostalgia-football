@@ -1,6 +1,8 @@
 import type { CareerScreenId } from '../components/layout/CareerNav';
+import type { PlayoffState } from '../engine/playoffs';
 import type { Fixture, Player } from '../engine/types';
 import type { TransferOffer, TransferTimelineEntry } from '../screens/TransferWindowScreen';
+import type { BackgroundLeagueState } from './backgroundLeague';
 
 const STORAGE_KEY = 'fsm-career-v1';
 
@@ -14,6 +16,17 @@ export interface CareerSaveData {
   clubId: string;
   leagueId: string;
   managerName: string;
+  /**
+   * Which clubs currently make up each league (keyed by league id) —
+   * absent on an old save, which just means "no promotion/relegation has
+   * happened yet, use the static src/data/leagues.ts rosters." See
+   * utils/pyramid.ts for how this changes between seasons.
+   */
+  leagueClubIds?: Record<string, string[]>;
+  /** Every other league's own simulated progress — absent on an old save, which just means "not caught up yet," resolved fresh next time CareerScreen mounts. See utils/backgroundLeague.ts. */
+  backgroundLeagues?: BackgroundLeagueState[];
+  /** The Championship promotion playoff, once the managed club's regular season ends — only ever set for a tier:'second' career. See engine/playoffs.ts. */
+  managedPlayoff?: PlayoffState | null;
   screen: CareerScreenId;
   formationId: string;
   selectedXI: string[];
