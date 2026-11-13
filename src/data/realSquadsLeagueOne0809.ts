@@ -50,7 +50,7 @@ export const REAL_SQUADS_LEAGUE_ONE_2008_09: Record<string, Player[]> = {
     mk('Craig Mackail-Smith', 'FWD', 25), mk('Aaron McLean', 'FWD', 24), mk('Lewis Pilling', 'FWD', 27),
   ],
   'l1-scunthorpe': [
-    mk('Joe Murphy', 'GK', 27), mk('Sam Russell', 'GK', 25),
+    mk('Joe Murphy', 'GK', 27), mk('Sam Slocombe', 'GK', 20),
     mk('Cliff Byrne', 'DEF', 29), mk('Rob Jones', 'DEF', 24), mk('Andy Crofts', 'DEF', 23), mk('Martyn Woolford', 'DEF', 22),
     mk('Grant McCann', 'MID', 29), mk('David Mirfin', 'MID', 22), mk('Josh Wright', 'MID', 20), mk('Paul Hayes', 'MID', 25),
     mk('Gary Hooper', 'FWD', 20), mk('Jim Paterson', 'FWD', 24), mk('Lewis Linacre', 'FWD', 22),
@@ -101,7 +101,7 @@ export const REAL_SQUADS_LEAGUE_ONE_2008_09: Record<string, Player[]> = {
     mk('Craig Vokins', 'GK', 35), mk('Stuart Nelson', 'GK', 27),
     mk('Antony Kay', 'DEF', 24), mk('Ian Goodison', 'DEF', 34), mk('John Welsh', 'DEF', 24), mk('David Raven', 'DEF', 23), mk('Ian Sharps', 'DEF', 21),
     mk('Chris McCready', 'MID', 25), mk('Ryan Taylor', 'MID', 21), mk('Gareth Edds', 'MID', 28),
-    mk('Chris Greenacre', 'FWD', 30), mk('Ian Thomas-Moore', 'FWD', 27), mk('Joe Thompson', 'FWD', 19),
+    mk('Chris Greenacre', 'FWD', 30), mk('Ian Thomas-Moore', 'FWD', 27), mk('Robbie Burns', 'FWD', 22),
   ],
   'l1-southend': [
     mk('Darryl Flahavan', 'GK', 29),
@@ -129,8 +129,8 @@ export const REAL_SQUADS_LEAGUE_ONE_2008_09: Record<string, Player[]> = {
   ],
   'l1-yeovil': [
     mk('Steve Mildenhall', 'GK', 31),
-    mk('Terrell Forbes', 'DEF', 24), mk('Luke Ayling', 'DEF', 17), mk('Scott Guyett', 'DEF', 28), mk('Lewis Teasdale', 'DEF', 29),
-    mk('Stephen Elliott', 'MID', 25), mk('Nathan Smith', 'MID', 20), mk('Craig Alcock', 'MID', 20), mk('Nathan Jones', 'MID', 31), mk('Jean-Paul Kalala', 'MID', 24),
+    mk('Terrell Forbes', 'DEF', 24), mk('Luke Ayling', 'DEF', 17), mk('Scott Guyett', 'DEF', 28), mk('Lewis Teasdale', 'DEF', 29), mk('Paul Huntington', 'DEF', 20),
+    mk('Nathan Smith', 'MID', 20), mk('Craig Alcock', 'MID', 20), mk('Nathan Jones', 'MID', 31), mk('Jean-Paul Kalala', 'MID', 24),
     mk('Lewis Vokins', 'FWD', 22), mk('Marcus Stewart', 'FWD', 34), mk('Paul Terry', 'FWD', 28),
   ],
   'l1-carlisle': [
@@ -142,7 +142,7 @@ export const REAL_SQUADS_LEAGUE_ONE_2008_09: Record<string, Player[]> = {
   'l1-bristol-rovers': [
     mk('Steve Phillips', 'GK', 34),
     mk('Stuart Campbell', 'DEF', 31), mk('Craig Hinton', 'DEF', 29), mk('Jeff Hughes', 'DEF', 22), mk('Lewis Pargo', 'DEF', 27),
-    mk('Byron Anthony', 'MID', 25), mk('Richard Walker', 'MID', 25), mk('Chris Lines', 'MID', 22), mk('Sammy Igoe', 'MID', 30), mk('John-Joe O’Toole', 'MID', 19),
+    mk('Byron Anthony', 'MID', 25), mk('Richard Walker', 'MID', 25), mk('Chris Lines', 'MID', 22), mk('Sammy Igoe', 'MID', 30), mk('Danny Jones', 'MID', 25),
     mk('Rickie Lambert', 'FWD', 26), mk('Craig Rimmer', 'FWD', 26), mk('Craig Disley', 'FWD', 23),
   ],
   'l1-stockport': [

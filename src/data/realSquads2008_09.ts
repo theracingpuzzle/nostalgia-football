@@ -155,7 +155,7 @@ export const REAL_SQUADS_2008_09: Record<string, Player[]> = {
     mk('Andy Griffin', 'DEF', 29), mk('Ryan Shawcross', 'DEF', 20), mk('Danny Higginbotham', 'DEF', 29), mk('Leon Cort', 'DEF', 28),
     mk('Rory Delap', 'MID', 32), mk('Glenn Whelan', 'MID', 24), mk('Liam Lawrence', 'MID', 26),
     mk('Salif Diao', 'MID', 30), mk('Matty Etherington', 'MID', 27),
-    mk('Ricardo Fuller', 'FWD', 27), mk('Mama Sidibe', 'FWD', 26), mk('James Beattie', 'FWD', 30),
+    mk('Ricardo Fuller', 'FWD', 27), mk('Mama Sidibe', 'FWD', 26), mk('Dave Kitson', 'FWD', 28),
     mk('Abdoulaye Faye', 'DEF', 29),
   ],
   bolton: [

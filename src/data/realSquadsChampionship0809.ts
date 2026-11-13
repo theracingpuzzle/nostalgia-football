@@ -46,20 +46,20 @@ function mk(name: string, position: Position, age = 27, injured = false): Player
 export const REAL_SQUADS_CHAMPIONSHIP_2008_09: Record<string, Player[]> = {
   'ch-wolves': [
     mk('Wayne Hennessey', 'GK', 21), mk('Matt Murray', 'GK', 27),
-    mk('Jody Craddock', 'DEF', 32), mk('Richard Stearman', 'DEF', 21), mk('George Elokobi', 'DEF', 22), mk('Kevin Foley', 'DEF', 25), mk('Ronald Zubar', 'DEF', 22),
-    mk('Karl Henry', 'MID', 25), mk('Michael Kightly', 'MID', 22), mk('Stephen Hunt', 'MID', 27), mk('David Edwards', 'MID', 21), mk('Seol Ki-hyeon', 'MID', 28),
-    mk('Sylvan Ebanks-Blake', 'FWD', 22), mk('Andy Keogh', 'FWD', 22), mk('Freddy Eastwood', 'FWD', 25),
+    mk('Jody Craddock', 'DEF', 32), mk('Richard Stearman', 'DEF', 21), mk('George Elokobi', 'DEF', 22), mk('Kevin Foley', 'DEF', 25), mk('Michael Mancienne', 'DEF', 20), mk('Stephen Ward', 'DEF', 25),
+    mk('Karl Henry', 'MID', 25), mk('Michael Kightly', 'MID', 22), mk('David Jones', 'MID', 24), mk('David Edwards', 'MID', 21), mk('Matt Jarvis', 'MID', 22),
+    mk('Sylvan Ebanks-Blake', 'FWD', 22), mk('Andy Keogh', 'FWD', 22), mk('Stephen Elliott', 'FWD', 25),
   ],
   'ch-birmingham': [
-    mk('Joe Hart', 'GK', 21), mk('Colin Doyle', 'GK', 23),
+    mk('Maik Taylor', 'GK', 36), mk('Colin Doyle', 'GK', 23),
     mk('Stephen Carr', 'DEF', 32), mk('Roger Johnson', 'DEF', 25), mk('Liam Ridgewell', 'DEF', 23), mk('Franck Queudrue', 'DEF', 29), mk('Stuart Parnaby', 'DEF', 26),
     mk('Lee Bowyer', 'MID', 31), mk('Barry Ferguson', 'MID', 30), mk('Sebastian Larsson', 'MID', 23), mk('James McFadden', 'MID', 25), mk('Gary McSheffrey', 'MID', 25), mk('Mehdi Nafti', 'MID', 32),
     mk('Cameron Jerome', 'FWD', 22), mk('Kevin Phillips', 'FWD', 35), mk('Garry O’Connor', 'FWD', 25),
   ],
   'ch-sheffield-utd': [
-    mk('Paddy Kenny', 'GK', 30), mk('Steve Simonsen', 'GK', 28),
+    mk('Paddy Kenny', 'GK', 30), mk('Justin Haber', 'GK', 24),
     mk('Chris Morgan', 'DEF', 31), mk('Matt Kilgallon', 'DEF', 24), mk('Claude Davis', 'DEF', 27), mk('Neill Collins', 'DEF', 26), mk('Kyle Naughton', 'DEF', 19),
-    mk('Lee Williamson', 'MID', 25), mk('Jamie Ward', 'MID', 22), mk('Andy Reid', 'MID', 26), mk('Stephen Quinn', 'MID', 22), mk('Nick Montgomery', 'MID', 26),
+    mk('Lee Williamson', 'MID', 25), mk('Jamie Ward', 'MID', 22), mk('David Cotterill', 'MID', 21), mk('Stephen Quinn', 'MID', 22), mk('Nick Montgomery', 'MID', 26),
     mk('James Beattie', 'FWD', 30), mk('Richard Cresswell', 'FWD', 30), mk('Billy Sharp', 'FWD', 22),
   ],
   'ch-burnley': [
@@ -69,7 +69,7 @@ export const REAL_SQUADS_CHAMPIONSHIP_2008_09: Record<string, Player[]> = {
     mk('Steven Fletcher', 'FWD', 21), mk('Martin Paterson', 'FWD', 20), mk('Ade Akinbiyi', 'FWD', 34), mk('Besian Idrizaj', 'FWD', 19),
   ],
   'ch-preston': [
-    mk('Andy Lonergan', 'GK', 24), mk('Wayne Brown', 'GK', 31),
+    mk('Andy Lonergan', 'GK', 24), mk('Chris Neal', 'GK', 22),
     mk('Youl Mawéné', 'DEF', 29), mk('Liam Chilvers', 'DEF', 28), mk('Billy Jones', 'DEF', 22), mk('Sean St Ledger', 'DEF', 23), mk('Callum Davidson', 'DEF', 33),
     mk('Keith Treacy', 'MID', 20), mk('Paul McKenna', 'MID', 28), mk('Simon Whalley', 'MID', 21),
     mk('Jon Parkin', 'FWD', 26), mk('Chris Brown', 'FWD', 24), mk('David Nugent', 'FWD', 23), mk('Jon Macken', 'FWD', 28),
@@ -178,7 +178,7 @@ export const REAL_SQUADS_CHAMPIONSHIP_2008_09: Record<string, Player[]> = {
   ],
   'ch-southampton': [
     mk('Kelvin Davis', 'GK', 31),
-    mk('Dan Harding', 'DEF', 23), mk('Jose Fonte', 'DEF', 24), mk('Radhi Jaidi', 'DEF', 33), mk('Chris Baird', 'DEF', 27),
+    mk('Dan Harding', 'DEF', 23), mk('Jose Fonte', 'DEF', 24), mk('Radhi Jaidi', 'DEF', 33), mk('Gary Monk', 'DEF', 29),
     mk('Andrew Surman', 'MID', 21), mk('Jermaine Wilson', 'MID', 24), mk('Youssef Safri', 'MID', 31), mk('Jhon Viáfara', 'MID', 27),
     mk('David McGoldrick', 'FWD', 20), mk('Stern John', 'FWD', 32), mk('Jason Euell', 'FWD', 31), mk('Bradley Wright-Phillips', 'FWD', 19), mk('Papa Waigo', 'FWD', 20),
   ],

@@ -70,7 +70,7 @@ export const REAL_SQUADS_LEAGUE_TWO_2008_09: Record<string, Player[]> = {
   'l2-rotherham': [
     mk('Lewis Rimmer', 'GK', 35), mk('Drewe Broughton', 'FWD', 28), mk('Ryan Cresswell', 'DEF', 18), mk('Jamie Green', 'DEF', 24),
     mk('Paul Hurst', 'DEF', 34), mk('Josh Law', 'MID', 25), mk('Lewis Farley', 'MID', 26), mk('Nathan Montgomery', 'MID', 21),
-    mk('Adam Le Fondre', 'FWD', 22), mk('Lewis Whitmore', 'FWD', 29), mk('Jamie Yates', 'FWD', 19), mk('Chris Beardsley', 'FWD', 24), mk('Scott Shearer', 'GK', 24),
+    mk('Mark Hudson', 'DEF', 28), mk('Lewis Whitmore', 'FWD', 29), mk('Jamie Yates', 'FWD', 19), mk('Chris Beardsley', 'FWD', 24), mk('Scott Shearer', 'GK', 24),
   ],
   'l2-chesterfield': [
     mk('Tommy Lee', 'GK', 22), mk('Jack Lester', 'FWD', 33), mk('Derek Niven', 'MID', 25), mk('Dean Holden', 'DEF', 29),
@@ -84,7 +84,7 @@ export const REAL_SQUADS_LEAGUE_TWO_2008_09: Record<string, Player[]> = {
   ],
   'l2-grimsby': [
     mk('Phil Barnes', 'GK', 22), mk('Paul Raynor', 'DEF', 34), mk('Michael Pattison', 'DEF', 23), mk('Gary Jones', 'MID', 32),
-    mk('Richard Hinds', 'DEF', 29), mk('Rob Atkinson', 'DEF', 23), mk('Michael Reddy', 'FWD', 25), mk('Isaiah Rankin', 'FWD', 30),
+    mk('Richard Hinds', 'DEF', 29), mk('Rob Atkinson', 'DEF', 23), mk('Michael Reddy', 'FWD', 25), mk('Isaiah Rankin', 'FWD', 30), mk('James Hunt', 'MID', 25),
     mk('John McDermott', 'DEF', 37), mk('Danny North', 'FWD', 22), mk('Jean-Paul Kamudimba Kalala', 'MID', 25), mk('Andy Monkhouse', 'FWD', 25), mk('Gary Bennett', 'MID', 28),
   ],
   'l2-port-vale': [
@@ -94,7 +94,7 @@ export const REAL_SQUADS_LEAGUE_TWO_2008_09: Record<string, Player[]> = {
   ],
   'l2-notts-county': [
     mk('Russell Hoult', 'GK', 37), mk('Craig Oakes', 'DEF', 30), mk('Alan Marriott', 'GK', 27), mk('Jake Buxton', 'DEF', 22),
-    mk('Adam Rundle', 'MID', 27), mk('Craig Westcarr', 'FWD', 21), mk('Myles Weston', 'FWD', 19), mk('John Thompson', 'DEF', 28),
+    mk('Jay Smith', 'MID', 27), mk('Craig Westcarr', 'FWD', 21), mk('Myles Weston', 'FWD', 19), mk('John Thompson', 'DEF', 28),
     mk('Richard Butcher', 'MID', 25), mk('Shaun Harrad', 'FWD', 24), mk('Neal Bishop', 'MID', 26), mk('Jonathan Forte', 'FWD', 22), mk('Kevin Rapley', 'DEF', 19),
   ],
   'l2-lincoln': [
@@ -103,9 +103,10 @@ export const REAL_SQUADS_LEAGUE_TWO_2008_09: Record<string, Player[]> = {
     mk('Lewis Swift', 'DEF', 25), mk('Nathan Jarman', 'FWD', 21), mk('Peter Gain', 'MID', 32), mk('Ben Hutchinson', 'MID', 21), mk('Lewis Hunt', 'DEF', 23),
   ],
   'l2-rochdale': [
-    mk('Lewis Knowles', 'GK', 26), mk('Chris O\'Grady', 'MID', 21), mk('Jason Kennedy', 'MID', 22), mk('Simon Ramsden', 'DEF', 26),
-    mk('Chris Dagnall', 'FWD', 21), mk('Craig Curran', 'FWD', 22), mk('Rhys Day', 'DEF', 23), mk('Craig Dawson', 'DEF', 19),
-    mk('Nicky Adams', 'MID', 19), mk('Glenn Murray', 'FWD', 25), mk('Michael Rose', 'DEF', 21), mk('Will Buckley', 'MID', 19), mk('Scott Wiseman', 'DEF', 21),
+    mk('Sam Russell', 'GK', 27), mk('Frank Fielding', 'GK', 21),
+    mk('Tom Kennedy', 'DEF', 23), mk('Nathan Stanton', 'DEF', 29), mk('Rory McArdle', 'DEF', 20), mk('Simon Ramsden', 'DEF', 26), mk('Scott Wiseman', 'DEF', 21),
+    mk('Adam Rundle', 'MID', 27), mk('Ciaran Toner', 'MID', 27), mk('Clark Keltie', 'MID', 25), mk('Gary Jones', 'MID', 32), mk('Joe Thompson', 'MID', 19), mk('Will Buckley', 'MID', 19),
+    mk('Adam Le Fondre', 'FWD', 22), mk('Chris Dagnall', 'FWD', 21), mk('Lee Thorpe', 'FWD', 32),
   ],
   'l2-accrington': [
     mk('Ian Dunbavin', 'GK', 27), mk('Richie Baker', 'MID', 25), mk('Robbie Threlfall', 'DEF', 20), mk('Peter Cavanagh', 'DEF', 29),

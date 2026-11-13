@@ -47,8 +47,8 @@ export const REAL_SQUADS_LA_LIGA_2008_09: Record<string, Player[]> = {
   'll-real-madrid': [
     mk('Iker Casillas', 'GK', 27), mk('Jerzy Dudek', 'GK', 35),
     mk('Sergio Ramos', 'DEF', 22), mk('Pepe', 'DEF', 25), mk('Christoph Metzelder', 'DEF', 28), mk('Gabriel Heinze', 'DEF', 30), mk('Míchel Salgado', 'DEF', 33), mk('Raúl Bravo', 'DEF', 27),
-    mk('Guti', 'MID', 32), mk('Rafael van der Vaart', 'MID', 25), mk('Fernando Gago', 'MID', 22), mk('Mahamadou Diarra', 'MID', 27), mk('Wesley Sneijder', 'MID', 24), mk('Royston Drenthe', 'MID', 21), mk('Lassana Diarra', 'MID', 23),
-    mk('Raúl', 'FWD', 31), mk('Ruud van Nistelrooy', 'FWD', 32), mk('Gonzalo Higuaín', 'FWD', 20), mk('Robinho', 'FWD', 24),
+    mk('Guti', 'MID', 32), mk('Rafael van der Vaart', 'MID', 25), mk('Fernando Gago', 'MID', 22), mk('Mahamadou Diarra', 'MID', 27), mk('Wesley Sneijder', 'MID', 24), mk('Royston Drenthe', 'MID', 21), mk('Arjen Robben', 'MID', 25),
+    mk('Raúl', 'FWD', 31), mk('Ruud van Nistelrooy', 'FWD', 32), mk('Gonzalo Higuaín', 'FWD', 20), mk('Klaas-Jan Huntelaar', 'FWD', 25),
   ],
   'll-barcelona': [
     mk('Víctor Valdés', 'GK', 26), mk('Albert Jorquera', 'GK', 28),
@@ -77,7 +77,7 @@ export const REAL_SQUADS_LA_LIGA_2008_09: Record<string, Player[]> = {
   'll-sevilla': [
     mk('Javi Varas', 'GK', 24), mk('Andrés Palop', 'GK', 33),
     mk('Julien Escudé', 'DEF', 27), mk('Fernando Navarro', 'DEF', 26), mk('Dragutinović', 'DEF', 27), mk('Javi Navarro', 'DEF', 27), mk('Adriano', 'DEF', 24),
-    mk('Jesús Navas', 'MID', 23), mk('Renato', 'MID', 25), mk('Diego Capel', 'MID', 20), mk('Christian Poulsen', 'MID', 28), mk('Didier Zokora', 'MID', 27),
+    mk('Jesús Navas', 'MID', 23), mk('Renato', 'MID', 25), mk('Diego Capel', 'MID', 20), mk('Christian Poulsen', 'MID', 28),
     mk('Luís Fabiano', 'FWD', 28), mk('Frédéric Kanouté', 'FWD', 30), mk('Alfonso', 'FWD', 24),
   ],
   'll-deportivo': [
