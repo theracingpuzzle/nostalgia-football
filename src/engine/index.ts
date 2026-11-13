@@ -5,6 +5,7 @@ export * from './teamStrength';
 export * from './matchSimulator';
 export * from './league';
 export * from './matchday';
+export * from './penalties';
 export * from './playoffs';
 export * from './squadAuto';
 export * from './ratings';

@@ -2,7 +2,8 @@ import { createRandom, weightedPick } from './rng';
 import { calculateTeamStrength } from './teamStrength';
 import type { MatchEvent, MatchResult, Player, Scorer, TeamMatchInput } from './types';
 
-const MINUTES_IN_MATCH = 90;
+export const MINUTES_IN_MATCH = 90;
+export const MINUTES_WITH_EXTRA_TIME = 120;
 const BASE_GOAL_RATE_PER_MINUTE = 0.0144; // tuned so two average sides average ~2.6 goals/match
 const HOME_ADVANTAGE_MULTIPLIER = 1.15;
 const CHANCE_EVENT_RATE_PER_MINUTE = 0.02;
@@ -16,6 +17,8 @@ export interface SimulateMatchOptions {
   away: TeamMatchInput;
   seed: number;
   applyHomeAdvantage?: boolean;
+  /** Defaults to 90 (MINUTES_IN_MATCH). A playoff tie level after 90 extends to 120 (extra time) — see engine/playoffs.ts — by re-running this same deterministic simulation with a longer total: minutes 1-90 replay identically from the same seed, then continue for 91-120. */
+  totalMinutes?: number;
 }
 
 /**
@@ -75,7 +78,7 @@ function addTally(tallies: Map<string, Scorer>, playerId: string, playerName: st
   else tallies.set(playerId, { playerId, playerName, minutes: [minute] });
 }
 
-export function createMatchSimulation({ fixtureId, home, away, seed, applyHomeAdvantage = true }: SimulateMatchOptions): MatchSimulationHandle {
+export function createMatchSimulation({ fixtureId, home, away, seed, applyHomeAdvantage = true, totalMinutes = MINUTES_IN_MATCH }: SimulateMatchOptions): MatchSimulationHandle {
   const random = createRandom(seed);
 
   const homeStrength = calculateTeamStrength(home);
@@ -144,7 +147,7 @@ export function createMatchSimulation({ fixtureId, home, away, seed, applyHomeAd
   }
 
   function advanceTo(targetMinute: number): void {
-    const clamped = Math.min(MINUTES_IN_MATCH, targetMinute);
+    const clamped = Math.min(totalMinutes, targetMinute);
     for (let minute = currentMinute + 1; minute <= clamped; minute++) {
       const homeScorerPool = outfield(homeXI);
       const awayScorerPool = outfield(awayXI);
@@ -211,9 +214,9 @@ export function createMatchSimulation({ fixtureId, home, away, seed, applyHomeAd
   return { advanceTo, substitute, getResult, getCurrentMinute: () => currentMinute };
 }
 
-/** Runs a full, non-interactive 90 minutes in one go — the common case (every fixture except the one you're actively watching live). */
+/** Runs a full, non-interactive match (90 minutes, or `totalMinutes` if given) in one go — the common case (every fixture except the one you're actively watching live). */
 export function simulateMatch(options: SimulateMatchOptions): MatchResult {
   const simulation = createMatchSimulation(options);
-  simulation.advanceTo(MINUTES_IN_MATCH);
+  simulation.advanceTo(options.totalMinutes ?? MINUTES_IN_MATCH);
   return simulation.getResult();
 }

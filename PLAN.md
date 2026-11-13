@@ -1373,3 +1373,79 @@ slow to click through end to end) — that path is covered instead by the
 unit tests above, which exercise the real pyramid-transition and
 playoff-resolution logic against the actual league data, not a
 simplified stand-in.
+
+## Real extra time and penalties in the Championship playoff
+
+User follow-up: the playoff's tiebreak needed to actually be extra time
+and penalties, not the "one decider match + coin flip" simplification
+shipped with the playoff feature above.
+
+**Extra time** (`engine/matchSimulator.ts`): `MINUTES_IN_MATCH` (90) was
+a hardcoded constant everywhere; `SimulateMatchOptions`/
+`createMatchSimulation` gained a `totalMinutes` option (still defaulting
+to 90) so a match can run to 120 instead. Extra time is a genuine
+*continuation* of the same simulation — `advanceTo(90)` then
+`advanceTo(120)` on the same handle — never a fresh re-simulation, so
+substitutions already made stay made and nothing about the first 90
+minutes changes.
+
+**Penalties** (new `engine/penalties.ts`): `simulatePenaltyShootout`
+takes each side's actual XI, best-shooters-first, 5 regular rounds then
+sudden death, each kick's chance nudged by the taker's `shooting` and
+the opposing keeper's `goalkeeping` around a ~76% base rate — not a
+verified real conversion rate, just plausible. All 5 regular rounds
+always get taken even once it's mathematically decided (real shootouts
+can stop early) — simpler, clearly-correct code over matching that one
+rule.
+
+**Wiring these into the playoff** (`engine/playoffs.ts`) turned out to
+have a real bug worth calling out: a tie's leg 2 needs extra time based
+on whether the AGGREGATE is level, not whether leg 2 *alone* is level —
+leg 1 2-0 then leg 2 1-1 is already decided 3-1, it doesn't need extra
+time just because leg 2 itself was drawn. The first pass got this wrong
+(checked leg 2 in isolation), which an end-to-end test caught
+immediately (a bracket would stall forever once a tie's "winner" never
+resolved). Fixed via a `getAggregateOffsetForFixture`/`aggregateOffset`
+parameter threaded through `simulateDecisiveFixture` — {0,0} for the
+final (no first leg), leg 1's score read the right way round for a tie's
+leg 2. Added a dedicated regression test that fails against the old
+"leg 2 alone" logic and passes against the fix, so this can't silently
+regress again.
+
+**The managed club actually plays extra time live**
+(`MatchAnimationScreen.tsx`) — not a cutscene: the same live match screen
+just keeps running past 90 into a new `'extra-time'` phase (`90-120`,
+same ticking mechanic, labelled "ET" on the clock), reusing the identical
+`createMatchSimulation` handle so any substitutions already made carry
+through unchanged. The same `aggregateOffset`-aware "is this level" check
+drives the live screen's own decision to extend. If still level at 120,
+a new `'penalties'` phase computes the shootout in one shot (using
+whoever's actually on the pitch — the managed side's current XI
+including subs, the AI side's unchanging one) and shows a clean
+kick-by-kick reveal rather than playing it out live minute-by-minute —
+consistent with how lightweight this engine already is elsewhere
+(injuries are a dice roll with no animation either). Also fixed a
+pre-existing gap while touching this: the live match screen never
+actually applied `applyHomeAdvantage: false` for a neutral-venue fixture
+(the final) — it does now.
+
+Background (AI-vs-AI) decisive fixtures resolve extra time and any
+needed shootout synchronously in one `simulateDecisiveFixture` call,
+rather than needing extra per-click steps — nobody's watching those live
+anyway.
+
+New unit tests: `engine/__tests__/penalties.test.ts` (always produces a
+winner, deterministic, cycles the taker list for sudden death, a
+much-better-shooting side wins more often across many seeds) and an
+expanded `engine/__tests__/playoffs.test.ts` covering
+`simulateDecisiveFixture`'s extra-time path directly (searches for a
+seed where a decisive fixture draws after 90, confirms it goes to extra
+time, confirms penalties get used only when still level after that) and
+the aggregate-offset regression above. Full existing suite re-run clean
+(97 tests). Live-verified the regular (non-playoff) match flow is
+unaffected by the `MatchAnimationScreen` rework — forcing a live
+extra-time/penalties sequence specifically wasn't verified in the
+browser (it needs an actual drawn match at the right point in a 46+
+matchday season to occur, impractical to force by clicking through), but
+is covered by the engine-level tests above, which directly exercise the
+same resolution logic the live screen calls into.

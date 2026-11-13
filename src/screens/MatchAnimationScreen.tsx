@@ -6,7 +6,8 @@ import { GoalFrame } from '../components/ui/GoalFrame';
 import { KitIcon } from '../components/ui/KitIcon';
 import { Panel } from '../components/ui/Panel';
 import type { ClubListing } from '../data/premierLeague0809';
-import { createMatchSimulation, type MatchSimulationHandle } from '../engine';
+import { createMatchSimulation, MINUTES_IN_MATCH, MINUTES_WITH_EXTRA_TIME, simulatePenaltyShootout, type MatchSimulationHandle } from '../engine';
+import type { PenaltyShootoutResult } from '../engine/penalties';
 import type { MatchResult, Player, Position, Scorer, TeamMatchInput } from '../engine/types';
 import { computeAttendance } from '../utils/attendance';
 
@@ -17,9 +18,13 @@ const GOAL_HOLD_MS = 1800;
 const SHOT_WINDUP_MS = 350;
 const MOMENTUM_SWING_EVERY_N_TICKS = 10; // ~3s at TICK_MS=300
 const MAX_SUBSTITUTIONS = 3; // the real-world limit for this era — five-sub rules came later
+// Arbitrary, large-enough offset so the shootout's own seeded random stream
+// never overlaps the match simulation's own (120 minutes of per-minute
+// checks is nowhere near this many random() calls).
+const PENALTY_SEED_OFFSET = 10_007;
 
 type Role = Position;
-type Phase = 'first-half' | 'half-time' | 'second-half';
+type Phase = 'first-half' | 'half-time' | 'second-half' | 'extra-time' | 'penalties';
 
 interface Dot {
   id: string;
@@ -123,6 +128,17 @@ function initialDots(): Dot[] {
  * substitutions for your own club (the AI side keeps its starting XI the
  * whole match — not confirmed either way from the original, a deliberate
  * simplification), then runs the second half with whatever changes you made.
+ *
+ * `allowExtraTimeAndPenalties` is only ever true for a Championship
+ * promotion playoff's decisive leg/final (see engine/playoffs.ts) — a
+ * regular league fixture (or a tie's first leg) just ends at 90 minutes
+ * as a draw, exactly as before. When it's level at 90 with that flag set,
+ * the SAME live simulation just keeps running to 120 (a genuine
+ * continuation, not a re-simulation — substitutions already made stay
+ * made); if still level, a penalty shootout is computed on the spot and
+ * shown as a result, not played kick-by-kick — consistent with how
+ * lightweight the rest of this engine already is (injuries are a dice
+ * roll with no animation either).
  */
 export function MatchAnimationScreen({
   fixtureId,
@@ -131,6 +147,9 @@ export function MatchAnimationScreen({
   homeInput,
   awayInput,
   seed,
+  applyHomeAdvantage = true,
+  allowExtraTimeAndPenalties = false,
+  aggregateOffset = { home: 0, away: 0 },
   managedSide,
   managedBench,
   onFinished,
@@ -141,11 +160,24 @@ export function MatchAnimationScreen({
   homeInput: TeamMatchInput;
   awayInput: TeamMatchInput;
   seed: number;
+  /** False for a neutral-venue fixture (a playoff final) — defaults to true, same as a normal league fixture. */
+  applyHomeAdvantage?: boolean;
+  /** True only for a Championship playoff's decisive leg/final. */
+  allowExtraTimeAndPenalties?: boolean;
+  /**
+   * Goals this match's home/away club already has from a first leg — a
+   * tie's leg2 needs to know this to correctly decide "is the AGGREGATE
+   * level", not just this match alone (leg1 2-0 then this match 1-1 is
+   * already decided 3-1, it doesn't need extra time just because this
+   * leg itself was drawn). Defaults to {0,0}, correct for the final
+   * (no first leg) and every non-playoff fixture.
+   */
+  aggregateOffset?: { home: number; away: number };
   /** Which side is the user's own club — only that side gets a substitution option at half time. */
   managedSide: 'home' | 'away';
   /** Squad players not in the starting XI (already excludes injured players). */
   managedBench: Player[];
-  onFinished: (result: MatchResult) => void;
+  onFinished: (result: MatchResult, outcome: { wentToExtraTime: boolean; penaltyShootout: PenaltyShootoutResult | null }) => void;
 }) {
   const [dots, setDots] = useState<Dot[]>(initialDots);
   const [ball, setBall] = useState({ x: 50, y: 50 });
@@ -173,6 +205,7 @@ export function MatchAnimationScreen({
   const [bench, setBench] = useState<Player[]>(managedBench);
   const [subsUsed, setSubsUsed] = useState(0);
   const [subsMade, setSubsMade] = useState<{ outName: string; inName: string }[]>([]);
+  const [penaltyShootout, setPenaltyShootout] = useState<PenaltyShootoutResult | null>(null);
 
   const simRef = useRef<MatchSimulationHandle | null>(null);
   const firedRef = useRef(new Set<number>());
@@ -182,9 +215,43 @@ export function MatchAnimationScreen({
   const shotInProgressRef = useRef(false);
 
   useEffect(() => {
-    simRef.current = createMatchSimulation({ fixtureId, home: homeInput, away: awayInput, seed });
+    simRef.current = createMatchSimulation({
+      fixtureId,
+      home: homeInput,
+      away: awayInput,
+      seed,
+      applyHomeAdvantage,
+      totalMinutes: allowExtraTimeAndPenalties ? MINUTES_WITH_EXTRA_TIME : MINUTES_IN_MATCH,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixtureId]);
+
+  /** Runs once, on entering the penalties phase — whoever's actually on the pitch for each side (the managed side's current XI including any subs; the AI side's unchanging selectedXI), not re-picked from scratch. */
+  function startPenaltyShootout() {
+    const managedCurrentXI = managedXI;
+    const opponentXI = managedSide === 'home' ? awayInput.selectedXI : homeInput.selectedXI;
+    const homeXI = managedSide === 'home' ? managedCurrentXI : opponentXI;
+    const awayXI = managedSide === 'home' ? opponentXI : managedCurrentXI;
+    setPenaltyShootout(simulatePenaltyShootout(homeXI, awayXI, seed + PENALTY_SEED_OFFSET));
+    setPhase('penalties');
+  }
+
+  /** Called once 90 (or, in extra time, 120) minutes are reached — decides whether the match is actually over, needs extra time, or needs penalties. */
+  function handleReachedEndOfPeriod(justFinishedMinute: number) {
+    const result = simRef.current!.getResult();
+    const level = aggregateOffset.home + result.homeGoals === aggregateOffset.away + result.awayGoals;
+    if (justFinishedMinute === MINUTES_IN_MATCH) {
+      if (allowExtraTimeAndPenalties && level) {
+        setPhase('extra-time');
+      } else {
+        onFinished(result, { wentToExtraTime: false, penaltyShootout: null });
+      }
+      return;
+    }
+    // justFinishedMinute === MINUTES_WITH_EXTRA_TIME
+    if (level) startPenaltyShootout();
+    else onFinished(result, { wentToExtraTime: true, penaltyShootout: null });
+  }
 
   const managedCards = managedSide === 'home' ? liveHomeCards : liveAwayCards;
   const sentOffIds = new Set(managedCards.filter((c) => c.cardType === 'red').map((c) => c.playerId));
@@ -244,15 +311,18 @@ export function MatchAnimationScreen({
     });
   }
 
-  // Runs one half (1-45 or 46-90) as a ticking interval, pausing (half time)
-  // or finishing (full time) once it reaches the half's target minute.
+  // Runs one half (1-45, 46-90, or — only for a playoff decisive leg/final
+  // level at 90 — 91-120 for extra time) as a ticking interval, pausing
+  // (half time) or finishing (full/extra time, or on to penalties) once it
+  // reaches that period's target minute. Penalties themselves aren't
+  // ticked — see startPenaltyShootout.
   useEffect(() => {
-    if (phase === 'half-time') return;
+    if (phase === 'half-time' || phase === 'penalties') return;
     const sim = simRef.current;
     if (!sim) return;
 
-    const halfStart = phase === 'first-half' ? 0 : 45;
-    const halfEnd = phase === 'first-half' ? 45 : 90;
+    const halfStart = phase === 'first-half' ? 0 : phase === 'second-half' ? 45 : MINUTES_IN_MATCH;
+    const halfEnd = phase === 'first-half' ? 45 : phase === 'second-half' ? MINUTES_IN_MATCH : MINUTES_WITH_EXTRA_TIME;
     let tick = 0;
 
     const interval = setInterval(() => {
@@ -290,7 +360,7 @@ export function MatchAnimationScreen({
       if (elapsed >= HALF_DURATION_MS) {
         clearInterval(interval);
         if (phase === 'first-half') setPhase('half-time');
-        else onFinished(sim.getResult());
+        else handleReachedEndOfPeriod(halfEnd);
       }
     }, TICK_MS);
 
@@ -308,11 +378,15 @@ export function MatchAnimationScreen({
     if (outPlayer) setSubsMade((prev) => [...prev, { outName: outPlayer.name, inName: inPlayer.name }]);
   }
 
-  function skipToFullTime() {
+  /** Skips to the end of whichever period is currently running (full time, or — in extra time — the end of extra time) and runs the same "is this actually over?" check as reaching it naturally would. */
+  function skipAhead() {
     const sim = simRef.current;
     if (!sim) return;
-    sim.advanceTo(90);
-    onFinished(sim.getResult());
+    const target = phase === 'extra-time' ? MINUTES_WITH_EXTRA_TIME : MINUTES_IN_MATCH;
+    sim.advanceTo(target);
+    setMinute(target);
+    processNewEvents(sim.getResult(), target);
+    handleReachedEndOfPeriod(target);
   }
 
   return (
@@ -328,7 +402,7 @@ export function MatchAnimationScreen({
               {liveHomeGoals} - {liveAwayGoals}
             </span>
             <span className="rounded-sm border-2 border-ink/50 bg-ink/10 px-2 py-1 text-sm font-bold text-ink">
-              {phase === 'half-time' ? 'HT' : `${minute}'`}
+              {phase === 'half-time' ? 'HT' : phase === 'penalties' ? 'PENS' : phase === 'extra-time' ? `${minute}' ET` : `${minute}'`}
             </span>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 text-base font-bold text-ink">
@@ -365,7 +439,10 @@ export function MatchAnimationScreen({
           </div>
         )}
         <div className="mx-1 mb-1 h-1.5 overflow-hidden rounded-full bg-ink/30">
-          <div className="h-full bg-white/80 transition-all duration-300 ease-linear" style={{ width: `${(minute / 90) * 100}%` }} />
+          <div
+            className="h-full bg-white/80 transition-all duration-300 ease-linear"
+            style={{ width: `${(minute / (phase === 'extra-time' ? MINUTES_WITH_EXTRA_TIME : MINUTES_IN_MATCH)) * 100}%` }}
+          />
         </div>
         <div className="px-1 pb-1 text-center text-[11px] text-ink/60">
           {homeClub.stadiumName} · Attendance {computeAttendance(fixtureId, homeClub.stadiumCapacity).toLocaleString()}
@@ -387,7 +464,14 @@ export function MatchAnimationScreen({
           subsMade={subsMade}
           onSubstitute={handleSubstitute}
           onContinue={() => setPhase('second-half')}
-          onSkip={skipToFullTime}
+          onSkip={skipAhead}
+        />
+      ) : phase === 'penalties' && penaltyShootout ? (
+        <PenaltyShootoutPanel
+          homeClub={homeClub}
+          awayClub={awayClub}
+          shootout={penaltyShootout}
+          onContinue={() => onFinished(simRef.current!.getResult(), { wentToExtraTime: true, penaltyShootout })}
         />
       ) : (
         <>
@@ -446,8 +530,8 @@ export function MatchAnimationScreen({
           </div>
 
           <div className="mt-1 flex justify-center">
-            <Button variant="secondary" onClick={skipToFullTime}>
-              Skip to Full Time
+            <Button variant="secondary" onClick={skipAhead}>
+              {phase === 'extra-time' ? 'Skip to End of Extra Time' : 'Skip to Full Time'}
             </Button>
           </div>
         </>
@@ -556,6 +640,56 @@ function HalfTimePanel({
         <Button variant="secondary" onClick={onSkip}>
           Skip to Full Time
         </Button>
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * Shown once a playoff decisive leg/final is still level after extra
+ * time — the shootout itself is computed in one shot (see
+ * startPenaltyShootout), not played kick-by-kick live, so this is just a
+ * clean reveal of the already-decided result rather than a tense
+ * minute-by-minute watch like the match itself.
+ */
+function PenaltyShootoutPanel({
+  homeClub,
+  awayClub,
+  shootout,
+  onContinue,
+}: {
+  homeClub: ClubListing;
+  awayClub: ClubListing;
+  shootout: PenaltyShootoutResult;
+  onContinue: () => void;
+}) {
+  const winnerClub = shootout.winnerSide === 'home' ? homeClub : awayClub;
+  return (
+    <Panel title="Penalties" className="mb-2">
+      <div className="flex flex-col items-center gap-3 p-2">
+        <div className="flex items-center gap-4 text-2xl font-black text-ink">
+          <span className="flex items-center gap-2">
+            <ClubCrest primaryColor={homeClub.primaryColor} secondaryColor={homeClub.secondaryColor} label={homeClub.shortName} crestPath={homeClub.crestPath} size={26} />
+            {shootout.homeScore}
+          </span>
+          <span className="text-base font-bold text-ink/50">—</span>
+          <span className="flex items-center gap-2">
+            {shootout.awayScore}
+            <ClubCrest primaryColor={awayClub.primaryColor} secondaryColor={awayClub.secondaryColor} label={awayClub.shortName} crestPath={awayClub.crestPath} size={26} />
+          </span>
+        </div>
+        <ul className="flex max-h-40 w-full flex-col gap-0.5 overflow-y-auto text-xs text-ink/80">
+          {shootout.kicks.map((kick, i) => (
+            <li key={i} className="flex items-center justify-between gap-2 rounded-sm bg-ink/5 px-2 py-1">
+              <span>
+                {kick.round > 5 ? `SD${kick.round - 5}` : kick.round} · {kick.side === 'home' ? homeClub.shortName : awayClub.shortName} — {kick.playerName}
+              </span>
+              <span className={kick.scored ? 'font-bold text-green-700' : 'font-bold text-red-700'}>{kick.scored ? 'Scored' : 'Missed'}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-center text-base font-black uppercase text-amber-600">{winnerClub.name} win on penalties!</p>
+        <Button onClick={onContinue}>Continue</Button>
       </div>
     </Panel>
   );

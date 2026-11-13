@@ -26,6 +26,8 @@ export interface DeferredMatchday {
   seed: number;
   managedSide: 'home' | 'away';
   matchday: number;
+  /** Whether the live screen should apply the home-advantage multiplier — false for a neutral-venue fixture (a playoff final). */
+  applyHomeAdvantage: boolean;
 }
 
 export interface SimulateMatchdayOptions {
@@ -55,7 +57,8 @@ export interface SimulateMatchdayResult {
   nextSeed: number;
 }
 
-function toEngineClub(meta: ClubMatchMeta, players: Player[]): Club {
+/** Builds an engine `Club` from a club's display identity plus its current squad — shared with engine/playoffs.ts's decisive-fixture (extra time/penalties) simulation. */
+export function toEngineClub(meta: ClubMatchMeta, players: Player[]): Club {
   return { id: meta.id, name: meta.name, shortName: meta.shortName, colors: { primary: meta.primaryColor, secondary: meta.secondaryColor }, reputation: 70, players };
 }
 
@@ -102,7 +105,7 @@ export function simulateMatchday({
       : { club: awayClubForEngine, formation: aiFormation, selectedXI: pickBestXI(awayClubForEngine, aiFormation) };
 
     if (isManagedHome || isManagedAway) {
-      deferred = { fixtureId: fixture.id, homeInput, awayInput, seed: nextSeed, managedSide: isManagedHome ? 'home' : 'away', matchday: fixture.matchday };
+      deferred = { fixtureId: fixture.id, homeInput, awayInput, seed: nextSeed, managedSide: isManagedHome ? 'home' : 'away', matchday: fixture.matchday, applyHomeAdvantage };
       nextSeed += 1;
       continue;
     }

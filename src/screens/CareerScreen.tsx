@@ -14,10 +14,13 @@ import {
   createRandom,
   fastForwardPlayoff,
   generateFixtures,
+  getAggregateOffsetForFixture,
   managedClubStillInPlayoff,
+  resolveManagedDecisiveFixture,
   simulateMatchday,
   type PlayoffState,
 } from '../engine';
+import type { PenaltyShootoutResult } from '../engine/penalties';
 import type { Fixture, MatchResult, Player, TeamMatchInput } from '../engine/types';
 import {
   advanceBackgroundLeagueMatchday,
@@ -327,6 +330,10 @@ interface LiveMatchSetup {
   seedAfterOtherFixtures: number;
   /** True for a Championship promotion playoff leg/final — its result commits into `managedPlayoff` instead of the regular `fixtures` list, and doesn't touch the career-level `nextSeed` (the playoff tracks its own). */
   isPlayoffMatch?: boolean;
+  /** True only for a playoff leg 2 or final — the fixture that can actually go to extra time/penalties if level (leg 1 never can, same as real football). Always false for a regular league fixture. */
+  isDecisivePlayoffMatch?: boolean;
+  /** False for the final (neutral venue) — true otherwise, including every regular league fixture. */
+  applyHomeAdvantage: boolean;
 }
 
 /**
@@ -697,15 +704,26 @@ export function CareerScreen({
     setNextSeed(seed);
   }
 
-  /** Called once the live match screen finishes the managed fixture (after any half-time substitutions) — commits its result and finally runs the injury pass for the whole matchday. */
-  function handleManagedMatchFinished(result: MatchResult) {
+  /**
+   * Called once the live match screen finishes the managed fixture (after
+   * any half-time substitutions, and — for a decisive playoff leg/final —
+   * any extra time/penalties it played through) — commits its result and
+   * finally runs the injury pass for the whole matchday.
+   */
+  function handleManagedMatchFinished(result: MatchResult, playoffOutcome?: { wentToExtraTime: boolean; penaltyShootout: PenaltyShootoutResult | null }) {
     if (!liveMatch) return;
 
     if (liveMatch.isPlayoffMatch) {
       // Playoff fixtures don't roll injuries (see engine/playoffs.ts) and
       // have their own independent seed stream inside managedPlayoff
       // itself — nothing here touches allSquads or the career's nextSeed.
-      if (managedPlayoff) setManagedPlayoff(applyResultToPlayoffFixture(managedPlayoff, liveMatch.fixtureId, result));
+      if (managedPlayoff) {
+        setManagedPlayoff(
+          liveMatch.isDecisivePlayoffMatch && playoffOutcome
+            ? resolveManagedDecisiveFixture(managedPlayoff, liveMatch.fixtureId, result, playoffOutcome.wentToExtraTime, playoffOutcome.penaltyShootout)
+            : applyResultToPlayoffFixture(managedPlayoff, liveMatch.fixtureId, result),
+        );
+      }
       setLiveMatch(null);
       return;
     }
@@ -768,6 +786,11 @@ export function CareerScreen({
         playedPlayerIdsByClub: {},
         seedAfterOtherFixtures: nextPlayoff.nextSeed,
         isPlayoffMatch: true,
+        // Leg 1 can never go to extra time (same as real football) — only
+        // leg 2 and the final can, and those are the only playoff fixture
+        // ids that don't end in "-leg1".
+        isDecisivePlayoffMatch: !deferred.fixtureId.endsWith('-leg1'),
+        applyHomeAdvantage: deferred.applyHomeAdvantage,
       });
       setLastPlayedFixtureId(deferred.fixtureId);
       setShowingAnimation(true);
@@ -864,10 +887,13 @@ export function CareerScreen({
           homeInput={liveMatch.homeInput}
           awayInput={liveMatch.awayInput}
           seed={liveMatch.seed}
+          applyHomeAdvantage={liveMatch.applyHomeAdvantage}
+          allowExtraTimeAndPenalties={liveMatch.isDecisivePlayoffMatch ?? false}
+          aggregateOffset={liveMatch.isDecisivePlayoffMatch && managedPlayoff ? getAggregateOffsetForFixture(managedPlayoff, liveMatch.fixtureId) : undefined}
           managedSide={liveMatch.managedSide}
           managedBench={liveMatch.managedBench}
-          onFinished={(result) => {
-            handleManagedMatchFinished(result);
+          onFinished={(result, outcome) => {
+            handleManagedMatchFinished(result, outcome);
             setShowingAnimation(false);
           }}
         />
