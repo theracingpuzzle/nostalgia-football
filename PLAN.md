@@ -1256,3 +1256,37 @@ rather than the period "Coca-Cola Championship" sponsor branding that
 was actually in use in 2008/09 — same kind of era-accuracy tradeoff
 already flagged for La Liga's logo, noted on `LeagueDefinition.logoPath`
 itself.
+
+## Fixed: Championship table showed Champions League / Europa zones
+
+Bug report: the Championship's league table (and the position badge, and
+the end-of-season screen) was labeling top-of-table finishes "Champions
+League qualification" and "Europa League" — copied wholesale from the
+Premier League/La Liga zone logic, which doesn't apply to a second-tier
+division at all. The Championship's actual end-of-season stakes are
+automatic promotion (top 2), the promotion playoffs (3rd-6th), and
+relegation (bottom 3) — no European competition.
+
+`LeagueDefinition` (leagues.ts) gained a `tier: 'top' | 'second'` field
+(`'top'` for the Premier League and La Liga, `'second'` for the
+Championship). `getLeagueZone` in `leagueZones.ts` now branches on it:
+`'top'` keeps the original champions/europa/relegation bands, `'second'`
+returns `'promotion'` (top 2), `'playoff'` (3rd-6th), or `'relegation'`
+(bottom 3) instead. Added a `zonesForTier` helper so the League Table's
+legend only lists the zones that actually apply to the league being
+viewed, rather than every zone across every tier. `tier` is threaded down
+from `CareerScreen` into `CareerNav`, `LeagueTableScreen`,
+`ClubOverviewScreen`, and `SeasonSummaryScreen` — the same way
+`totalClubs` already was.
+
+`SeasonSummaryScreen` gained matching headlines ("Automatic promotion!" /
+"Promotion playoff spot!") and extended the existing "promotion/relegation
+between divisions isn't modeled yet" caveat to cover these too, not just
+relegation — same honesty convention as everywhere else division-crossing
+would come up.
+
+Verified live: a Championship career's table/position badge/legend now
+show Automatic Promotion (emerald) / Promotion Playoffs (teal) /
+Relegation (red), with correct banding (1-2 / 3-6 / bottom-3 of 24); a
+Premier League career is unaffected (still Champions League (blue) /
+Europa (orange) / Relegation (red), 1-4 / 5-6 / bottom-3 of 20).

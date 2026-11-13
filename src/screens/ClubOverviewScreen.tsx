@@ -3,6 +3,7 @@ import { Button } from '../components/ui/Button';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
 import type { ClubListing } from '../data/premierLeague0809';
+import type { LeagueDefinition } from '../data/leagues';
 import { computeMonthlyPlayerStats } from '../engine';
 import type { Fixture, LeagueTableRow, Player, Position } from '../engine/types';
 import { getLeagueZone, ordinal, ZONE_STYLES } from '../utils/leagueZones';
@@ -20,6 +21,7 @@ export function ClubOverviewScreen({
   leagueRow,
   leaguePosition,
   totalClubs,
+  leagueTier,
   squad,
   fixtures,
   allSquads,
@@ -29,6 +31,7 @@ export function ClubOverviewScreen({
   leagueRow: LeagueTableRow | undefined;
   leaguePosition: number;
   totalClubs: number;
+  leagueTier: LeagueDefinition['tier'];
   squad: Player[];
   fixtures: Fixture[];
   allSquads: Record<string, Player[]>;
@@ -57,7 +60,7 @@ export function ClubOverviewScreen({
     });
   }, [squad, statsByPlayerId]);
 
-  const zone = getLeagueZone(leaguePosition, totalClubs);
+  const zone = getLeagueZone(leaguePosition, totalClubs, leagueTier);
 
   return (
     <div className="mx-auto max-w-2xl p-4 text-white">

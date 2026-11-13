@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
 import { ALL_CLUBS } from '../data/leagues';
+import type { LeagueDefinition } from '../data/leagues';
 import type { Fixture, LeagueTableRow, Player } from '../engine/types';
-import { getLeagueZone, ZONE_STYLES } from '../utils/leagueZones';
+import { getLeagueZone, zonesForTier, ZONE_STYLES } from '../utils/leagueZones';
 import { ClubOverviewScreen } from './ClubOverviewScreen';
 
 export function LeagueTableScreen({
@@ -11,11 +12,13 @@ export function LeagueTableScreen({
   managedClubId,
   fixtures,
   allSquads,
+  leagueTier,
 }: {
   table: LeagueTableRow[];
   managedClubId: string;
   fixtures: Fixture[];
   allSquads: Record<string, Player[]>;
+  leagueTier: LeagueDefinition['tier'];
 }) {
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const selectedClub = selectedClubId ? ALL_CLUBS.find((c) => c.id === selectedClubId) : null;
@@ -46,7 +49,7 @@ export function LeagueTableScreen({
                 const club = ALL_CLUBS.find((c) => c.id === row.clubId);
                 const isManaged = row.clubId === managedClubId;
                 const position = i + 1;
-                const zone = getLeagueZone(position, table.length);
+                const zone = getLeagueZone(position, table.length, leagueTier);
                 const stripeClass = zone ? ZONE_STYLES[zone].stripe : 'border-l-4 border-l-transparent';
                 return (
                   <tr
@@ -78,7 +81,7 @@ export function LeagueTableScreen({
           </table>
         </div>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-ink/10 pt-2 text-xs text-ink/70">
-          {(Object.keys(ZONE_STYLES) as (keyof typeof ZONE_STYLES)[]).map((zone) => (
+          {zonesForTier(leagueTier).map((zone) => (
             <span key={zone} className="flex items-center gap-1.5">
               <span className={`inline-block h-2.5 w-2.5 rounded-full ${ZONE_STYLES[zone].dot}`} />
               {ZONE_STYLES[zone].label}
@@ -94,6 +97,7 @@ export function LeagueTableScreen({
             leagueRow={table.find((r) => r.clubId === selectedClub.id)}
             leaguePosition={selectedPosition}
             totalClubs={table.length}
+            leagueTier={leagueTier}
             squad={allSquads[selectedClub.id] ?? []}
             fixtures={fixtures}
             allSquads={allSquads}

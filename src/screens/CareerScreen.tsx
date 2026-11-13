@@ -687,6 +687,7 @@ export function CareerScreen({
       <SeasonSummaryScreen
         club={club}
         leagueName={league.name}
+        leagueTier={league.tier}
         leagueRow={table.find((r) => r.clubId === club.id)}
         leaguePosition={leaguePosition}
         totalClubs={ALL_CLUB_IDS.length}
@@ -707,6 +708,7 @@ export function CareerScreen({
         screen={screen}
         leaguePosition={leaguePosition}
         totalClubs={ALL_CLUB_IDS.length}
+        leagueTier={league.tier}
         onNavigate={setScreen}
         onChangeClub={onChangeClub}
       />
@@ -742,7 +744,7 @@ export function CareerScreen({
         />
       )}
 
-      {screen === 'table' && <LeagueTableScreen table={table} managedClubId={club.id} fixtures={fixtures} allSquads={allSquads} />}
+      {screen === 'table' && <LeagueTableScreen table={table} managedClubId={club.id} fixtures={fixtures} allSquads={allSquads} leagueTier={league.tier} />}
 
       {screen === 'stats' && <StatsScreen stats={leagueSeasonTotals} managedClubId={club.id} />}
 

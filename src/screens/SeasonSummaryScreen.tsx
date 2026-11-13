@@ -5,15 +5,18 @@ import { FormationXIPitch } from '../components/ui/FormationXIPitch';
 import { Panel } from '../components/ui/Panel';
 import { FORMATIONS } from '../data/formations';
 import { ALL_CLUBS } from '../data/leagues';
+import type { LeagueDefinition } from '../data/leagues';
 import { computeMonthlyPlayerStats, pickTeamOfTheMonth } from '../engine';
 import type { Fixture, LeagueTableRow, Player } from '../engine/types';
 import { getLeagueZone, ordinal } from '../utils/leagueZones';
 import type { PlayerSeasonTotal } from './StatsScreen';
 
-const HEADLINES: Record<'champion' | 'champions' | 'europa' | 'relegation' | 'mid', { title: string; tone: string }> = {
+const HEADLINES: Record<'champion' | 'champions' | 'europa' | 'promotion' | 'playoff' | 'relegation' | 'mid', { title: string; tone: string }> = {
   champion: { title: '🏆 Champions!', tone: 'bg-amber-400 text-ink border-amber-600' },
   champions: { title: 'Champions League qualification!', tone: 'bg-blue-600 text-white border-blue-800' },
   europa: { title: 'Europa League / UEFA Cup qualification!', tone: 'bg-orange-500 text-white border-orange-700' },
+  promotion: { title: 'Automatic promotion!', tone: 'bg-emerald-600 text-white border-emerald-800' },
+  playoff: { title: 'Promotion playoff spot!', tone: 'bg-teal-500 text-white border-teal-700' },
   relegation: { title: 'Relegated', tone: 'bg-red-700 text-white border-red-900' },
   mid: { title: 'Season complete', tone: 'bg-ink/80 text-white border-ink' },
 };
@@ -28,6 +31,7 @@ const HEADLINES: Record<'champion' | 'champions' | 'europa' | 'relegation' | 'mi
 export function SeasonSummaryScreen({
   club,
   leagueName,
+  leagueTier,
   leagueRow,
   leaguePosition,
   totalClubs,
@@ -39,6 +43,7 @@ export function SeasonSummaryScreen({
 }: {
   club: { name: string; shortName: string; primaryColor: string; secondaryColor: string; crestPath?: string; id: string };
   leagueName: string;
+  leagueTier: LeagueDefinition['tier'];
   leagueRow: LeagueTableRow | undefined;
   leaguePosition: number;
   totalClubs: number;
@@ -48,9 +53,10 @@ export function SeasonSummaryScreen({
   onNewSeason: () => void;
   onClose: () => void;
 }) {
-  const zone = getLeagueZone(leaguePosition, totalClubs);
+  const zone = getLeagueZone(leaguePosition, totalClubs, leagueTier);
   const headlineKey = leaguePosition === 1 ? 'champion' : zone ?? 'mid';
   const headline = HEADLINES[headlineKey];
+  const movesDivision = headlineKey === 'relegation' || headlineKey === 'promotion' || headlineKey === 'playoff' || (headlineKey === 'champion' && leagueTier === 'second');
 
   const playerIndex = useMemo(() => {
     const map = new Map<string, { player: Player; clubId: string }>();
@@ -76,7 +82,7 @@ export function SeasonSummaryScreen({
         <span className="text-sm font-semibold">
           {club.name} finished {ordinal(leaguePosition)} of {totalClubs}
         </span>
-        {headlineKey === 'relegation' && (
+        {movesDivision && (
           <span className="text-xs italic opacity-80">
             (Promotion/relegation between divisions isn't modeled yet — next season starts back in the same {totalClubs}-club {leagueName}.)
           </span>

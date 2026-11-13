@@ -19,6 +19,15 @@ export interface LeagueDefinition {
    * league without one falls back to just its name.
    */
   logoPath?: string;
+  /**
+   * What finishing position means. A `'top'` division sends its top finishers
+   * to European competition (Champions League / Europa) and relegates its
+   * bottom 3; a `'second'` division (the Championship) instead promotes its
+   * top 2 automatically and sends 3rd-6th into the promotion playoffs,
+   * alongside the same bottom-3 relegation. Drives `getLeagueZone` in
+   * leagueZones.ts — see PLAN.md.
+   */
+  tier: 'top' | 'second';
 }
 
 /**
@@ -33,9 +42,9 @@ export interface LeagueDefinition {
  * length added for this (see `buildSeasonMonths` in seasonMonths.ts).
  */
 export const LEAGUES: LeagueDefinition[] = [
-  { id: 'premier-league', name: 'Premier League', clubs: PREMIER_LEAGUE_2008_09, logoPath: 'leagues/premier-league.png' },
-  { id: 'la-liga', name: 'La Liga', clubs: LA_LIGA_2008_09, logoPath: 'leagues/la-liga.png' },
-  { id: 'championship', name: 'Championship', clubs: CHAMPIONSHIP_2008_09, logoPath: 'leagues/championship.svg' },
+  { id: 'premier-league', name: 'Premier League', clubs: PREMIER_LEAGUE_2008_09, logoPath: 'leagues/premier-league.png', tier: 'top' },
+  { id: 'la-liga', name: 'La Liga', clubs: LA_LIGA_2008_09, logoPath: 'leagues/la-liga.png', tier: 'top' },
+  { id: 'championship', name: 'Championship', clubs: CHAMPIONSHIP_2008_09, logoPath: 'leagues/championship.svg', tier: 'second' },
 ];
 
 /** Every club across every league, flattened — for lookups where it doesn't matter which league a club belongs to (crest/colors/stadium display). Club ids are unique across leagues by construction. */

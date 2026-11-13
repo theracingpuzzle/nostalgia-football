@@ -3,6 +3,7 @@ import { ClubCrest } from '../ui/ClubCrest';
 import { getContrastTextColor } from '../../utils/colorContrast';
 import { getLeagueZone, ordinal, ZONE_STYLES } from '../../utils/leagueZones';
 import type { ClubListing } from '../../data/premierLeague0809';
+import type { LeagueDefinition } from '../../data/leagues';
 
 export type CareerScreenId = 'team' | 'fixtures' | 'table' | 'stats' | 'totm';
 
@@ -63,6 +64,7 @@ export function CareerNav({
   screen,
   leaguePosition,
   totalClubs,
+  leagueTier,
   onNavigate,
   onChangeClub,
 }: {
@@ -72,12 +74,13 @@ export function CareerNav({
   /** Current league position (1-based), so the manager can see it without switching to the Table tab. */
   leaguePosition: number;
   totalClubs: number;
+  leagueTier: LeagueDefinition['tier'];
   onNavigate: (screen: CareerScreenId) => void;
   onChangeClub: () => void;
 }) {
   const textColor = getContrastTextColor(club.primaryColor);
   const [menuOpen, setMenuOpen] = useState(false);
-  const zone = getLeagueZone(leaguePosition, totalClubs);
+  const zone = getLeagueZone(leaguePosition, totalClubs, leagueTier);
 
   return (
     <div className="relative border-b-2 border-black/30 px-3 py-2" style={{ backgroundColor: club.primaryColor }}>
