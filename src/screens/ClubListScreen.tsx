@@ -12,7 +12,7 @@ import type { LeagueDefinition } from '../data/leagues';
  * populated, so that path is dormant but kept for when a club's data is
  * ever pulled for rework.
  */
-export function ClubListScreen({ league, onSelectClub }: { league: LeagueDefinition; onSelectClub: (clubId: string) => void }) {
+export function ClubListScreen({ league, onSelectClub, onBack }: { league: LeagueDefinition; onSelectClub: (clubId: string) => void; onBack: () => void }) {
   const clubsAlphabetical = [...league.clubs].sort((a, b) => a.name.localeCompare(b.name));
 
   // Lands here straight after picking a league, so make sure the page
@@ -23,6 +23,9 @@ export function ClubListScreen({ league, onSelectClub }: { league: LeagueDefinit
 
   return (
     <div className="mx-auto max-w-3xl p-4 text-white">
+      <button onClick={onBack} className="mb-2 text-sm font-bold uppercase text-white/70 hover:text-white">
+        ← Back to Leagues
+      </button>
       <h2 className="mb-1 text-center text-2xl font-black uppercase tracking-wide">{league.name} 2008/09</h2>
       <p className="mb-3 text-center text-sm text-white/70">Choose a club below to become their manager for the season.</p>
 

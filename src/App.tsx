@@ -66,6 +66,7 @@ function App() {
         <ClubListScreen
           league={LEAGUES.find((l) => l.id === stage.leagueId) ?? LEAGUES[0]}
           onSelectClub={(clubId) => setStage({ kind: 'career', clubId })}
+          onBack={() => setStage('leagueSelect')}
         />
       ) : (
         <ClubRoute
