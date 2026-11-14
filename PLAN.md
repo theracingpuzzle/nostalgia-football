@@ -1852,3 +1852,24 @@ resumes normal play with the cooldown field set, then reverted the
 constant before shipping (Accept reuses the exact same `handleTakeNewJob`
 function already proven correct via the sacked-flow test, so wasn't
 re-verified separately).
+
+## Clear "Season N" labeling
+
+User request: label which season of the career it is as the player
+progresses. New `CareerSaveData.seasonNumber` (optional, absent on an
+old save treated as 1 — no way to know how many seasons it's already
+been through), incremented only by `startNewSeason()`; a mid-season job
+change (sacked or approached) carries it over unchanged, since it's
+still the same season, just a different club. Shown in `CareerNav`'s
+header ("Managed by {name} · Season {N}", always visible), the title
+screen's "Continue as..." label, and — the natural moment for it —
+`SeasonSummaryScreen`'s heading ("Season {N} Complete") and its button
+("Start Season {N+1}" instead of a generic "Start New Season").
+
+Verified live: an old save (predating this field) correctly showed
+"Season 1"; forced a season to complete via localStorage injection
+(played every remaining fixture) and confirmed "Season 1 Complete" and
+"Start Season 2" both rendered correctly, and that clicking through
+updated the header to "Season 2" immediately. New
+`careerStorage.test.ts` round-trip test; full suite, `tsc`, `eslint`
+clean.

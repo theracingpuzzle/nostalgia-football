@@ -85,5 +85,12 @@ describe('careerStorage', () => {
     expect(loaded?.sackedState).toBeUndefined();
     expect(loaded?.managerApproachState).toBeUndefined();
     expect(loaded?.managerLastApproachMatchday).toBeUndefined();
+    expect(loaded?.seasonNumber).toBeUndefined();
+  });
+
+  it('round-trips seasonNumber', () => {
+    const save = makeSave({ seasonNumber: 4 });
+    saveCareer(save);
+    expect(loadCareer()?.seasonNumber).toBe(4);
   });
 });

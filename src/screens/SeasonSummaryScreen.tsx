@@ -81,6 +81,7 @@ export function SeasonSummaryScreen({
   leagueRow,
   leaguePosition,
   totalClubs,
+  seasonNumber,
   divisionOutcome,
   divisionAboveName,
   divisionBelowName,
@@ -96,6 +97,8 @@ export function SeasonSummaryScreen({
   leagueRow: LeagueTableRow | undefined;
   leaguePosition: number;
   totalClubs: number;
+  /** Which season of the career just ended — 1 for a brand new career's first season. */
+  seasonNumber: number;
   /** The real promotion/relegation result, when one applies (any league actually linked into the pyramid chain — see CareerScreen/ENGLISH_PYRAMID). null for every other case, including La Liga, which has no division to move to/from. */
   divisionOutcome: DivisionOutcome | null;
   /** The real division directly above this one in the pyramid chain, for a promotion subtitle. Undefined if this league isn't in the chain or is already at the top. */
@@ -137,7 +140,7 @@ export function SeasonSummaryScreen({
 
   return (
     <div className="mx-auto max-w-3xl p-4 text-white">
-      <h2 className="mb-3 text-center text-xl font-black uppercase tracking-wide">Season Complete</h2>
+      <h2 className="mb-3 text-center text-xl font-black uppercase tracking-wide">Season {seasonNumber} Complete</h2>
 
       <div className={`mb-3 flex flex-col items-center gap-2 rounded-sm border-2 p-3 text-center ${headline.tone}`}>
         <ClubCrest primaryColor={club.primaryColor} secondaryColor={club.secondaryColor} label={club.shortName} crestPath={club.crestPath} size={40} />
@@ -199,7 +202,7 @@ export function SeasonSummaryScreen({
           Review First
         </Button>
         <Button style={{ backgroundColor: club.primaryColor, borderColor: club.secondaryColor }} onClick={onNewSeason}>
-          Start New Season
+          Start Season {seasonNumber + 1}
         </Button>
       </div>
     </div>

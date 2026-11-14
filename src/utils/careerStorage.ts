@@ -17,6 +17,8 @@ export interface CareerSaveData {
   clubId: string;
   leagueId: string;
   managerName: string;
+  /** Which season of the career this is — 1 for a brand new career, incremented every startNewSeason(). Absent on an old save, treated as 1 (no way to know how many seasons it's already been through). */
+  seasonNumber?: number;
   /**
    * Which clubs currently make up each league (keyed by league id) —
    * absent on an old save, which just means "no promotion/relegation has

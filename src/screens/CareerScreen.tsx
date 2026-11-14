@@ -379,6 +379,12 @@ export function CareerScreen({
 }) {
   const resume = initialSave && initialSave.clubId === club.id ? initialSave : undefined;
 
+  // Which season of the career this is — 1 for a brand new career,
+  // incremented only by startNewSeason(). A mid-season club swap
+  // (sacked or approached) carries this over unchanged — it's still the
+  // same season, just a different job.
+  const [seasonNumber, setSeasonNumber] = useState(resume?.seasonNumber ?? 1);
+
   // Which clubs currently make up each league — starts as the static
   // registry (src/data/leagues.ts) but is career-local state from here on,
   // because promotion/relegation (see utils/pyramid.ts) can move clubs
@@ -519,6 +525,7 @@ export function CareerScreen({
     saveCareer({
       clubId: club.id,
       leagueId: league.id,
+      seasonNumber,
       leagueClubIds,
       backgroundLeagues,
       managedPlayoff,
@@ -546,6 +553,7 @@ export function CareerScreen({
   }, [
     club.id,
     league.id,
+    seasonNumber,
     leagueClubIds,
     backgroundLeagues,
     managedPlayoff,
@@ -772,6 +780,7 @@ export function CareerScreen({
     onTakeNewJob(newClubId, {
       clubId: newClubId,
       leagueId: league.id,
+      seasonNumber,
       managerName,
       leagueClubIds,
       backgroundLeagues,
@@ -1024,6 +1033,7 @@ export function CareerScreen({
       }),
     );
     setManagedPlayoff(null);
+    setSeasonNumber((prev) => prev + 1);
     setFixtures(generateFixtures(nextManagedClubIds));
     setNextSeed(Math.floor(Math.random() * 1_000_000) + 1);
     setLastPlayedFixtureId(null);
@@ -1134,6 +1144,7 @@ export function CareerScreen({
         leagueRow={table.find((r) => r.clubId === club.id)}
         leaguePosition={leaguePosition}
         totalClubs={ALL_CLUB_IDS.length}
+        seasonNumber={seasonNumber}
         divisionOutcome={divisionOutcome}
         divisionAboveName={pyramidChainIndex > 0 ? LEAGUES.find((l) => l.id === ENGLISH_PYRAMID[pyramidChainIndex - 1])?.name : undefined}
         divisionBelowName={hasRealDivisionBelow ? LEAGUES.find((l) => l.id === ENGLISH_PYRAMID[pyramidChainIndex + 1])?.name : undefined}
@@ -1151,6 +1162,7 @@ export function CareerScreen({
       <CareerNav
         club={club}
         managerName={managerName}
+        seasonNumber={seasonNumber}
         screen={screen}
         leaguePosition={leaguePosition}
         totalClubs={ALL_CLUB_IDS.length}

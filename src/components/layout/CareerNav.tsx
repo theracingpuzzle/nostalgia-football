@@ -64,6 +64,7 @@ function NavButtons({
 export function CareerNav({
   club,
   managerName,
+  seasonNumber,
   screen,
   leaguePosition,
   totalClubs,
@@ -74,6 +75,8 @@ export function CareerNav({
 }: {
   club: ClubListing;
   managerName: string;
+  /** Which season of the career this is — 1 for a brand new career, incremented every new season. Always shown so progress through a long career stays clear at a glance. */
+  seasonNumber: number;
   screen: CareerScreenId;
   /** Current league position (1-based), so the manager can see it without switching to the Table tab. */
   leaguePosition: number;
@@ -99,7 +102,7 @@ export function CareerNav({
               {club.name}
             </span>
             <span className="block truncate text-[11px] font-semibold" style={{ color: textColor, opacity: 0.75 }}>
-              Managed by {managerName}
+              Managed by {managerName} · Season {seasonNumber}
             </span>
           </div>
           <button

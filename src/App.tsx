@@ -28,7 +28,11 @@ function App() {
           setSavedCareer(null);
           setStage('managerName');
         }}
-        continueLabel={savedClub ? `Continue as ${savedClub.shortName}${savedLeague ? ` (${savedLeague.name})` : ''} — ${savedCareer?.managerName}` : undefined}
+        continueLabel={
+          savedClub
+            ? `Continue as ${savedClub.shortName}${savedLeague ? ` (${savedLeague.name})` : ''} — ${savedCareer?.managerName}, Season ${savedCareer?.seasonNumber ?? 1}`
+            : undefined
+        }
         onContinueCareer={
           savedCareer && savedClub
             ? () => {
