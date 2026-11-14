@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { ClubCrest } from '../ui/ClubCrest';
 import { getContrastTextColor } from '../../utils/colorContrast';
 import { getLeagueZone, ordinal, ZONE_STYLES } from '../../utils/leagueZones';
+import { jobSecurityBand } from '../../utils/managerDisplay';
 import type { ClubListing } from '../../data/premierLeague0809';
 import type { LeagueDefinition } from '../../data/leagues';
 
-export type CareerScreenId = 'team' | 'fixtures' | 'table' | 'stats' | 'totm' | 'otherLeagues';
+export type CareerScreenId = 'team' | 'fixtures' | 'table' | 'stats' | 'totm' | 'otherLeagues' | 'managers';
 
 const NAV_ITEMS: { screen: CareerScreenId; label: string }[] = [
   { screen: 'team', label: 'Team Selection' },
@@ -14,6 +15,7 @@ const NAV_ITEMS: { screen: CareerScreenId; label: string }[] = [
   { screen: 'stats', label: 'Stats' },
   { screen: 'totm', label: 'TOTM' },
   { screen: 'otherLeagues', label: 'Other Leagues' },
+  { screen: 'managers', label: 'Managers' },
 ];
 
 /** Nav buttons, shared between the desktop row and the mobile dropdown — same markup, different layout wrapper. */
@@ -57,16 +59,6 @@ function NavButtons({
       </button>
     </>
   );
-}
-
-/** Same dot+label visual pattern as ZONE_STYLES, but this isn't a league zone — it's the player's own job security (see engine/managers.ts). */
-// Bands are set relative to MANAGER_STARTING_CONFIDENCE (55 — see
-// engine/managers.ts), not an absolute midpoint: a brand-new hire should
-// always read as "Secure," not already under pressure on day one.
-function jobSecurityBand(confidence: number): { label: string; dot: string } {
-  if (confidence >= 45) return { label: 'Secure', dot: 'bg-emerald-500' };
-  if (confidence >= 20) return { label: 'Under Pressure', dot: 'bg-amber-400' };
-  return { label: 'On The Brink', dot: 'bg-red-600' };
 }
 
 export function CareerNav({

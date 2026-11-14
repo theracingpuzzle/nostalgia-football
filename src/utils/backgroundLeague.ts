@@ -7,12 +7,13 @@ import {
   createClubManagers,
   createPlayoffState,
   createRandom,
+  fillStaleVacancies,
   generateFixtures,
   playoffSeedStartForTier,
   simulateMatchday,
   updateLeagueManagers,
   type ClubManagerState,
-  type ManagerSackingEvent,
+  type ManagerNewsEvent,
   type PlayoffState,
 } from '../engine';
 import type { Fixture, Player } from '../engine/types';
@@ -36,8 +37,8 @@ export interface BackgroundLeagueState {
   playoff: PlayoffState | null;
   /** Every club's current manager and how much trouble they're in — see engine/managers.ts. Resets fresh every season, same simplification already applied to everything else here. */
   managers: Record<string, ClubManagerState>;
-  /** Sackings that have actually happened this season, newest first. */
-  managerNews: ManagerSackingEvent[];
+  /** Sackings and appointments that have actually happened this season, newest first. */
+  managerNews: ManagerNewsEvent[];
 }
 
 export function createBackgroundLeagueState(leagueId: string, clubIds: string[], seed: number): BackgroundLeagueState {
@@ -87,9 +88,10 @@ export function advanceBackgroundLeagueMatchday(
     const updatedAllSquads = applyInjuryUpdates(allSquads, matchday, playedPlayerIdsByClub, injuryRandom);
     const managerRandom = createRandom(nextSeed + 1);
     const table = computeLeagueTable(state.clubIds, nextFixtures);
-    const { nextManagers, sackings } = updateLeagueManagers(state.managers, state.clubIds, table, nextFixtures, matchday, managerRandom);
+    const { nextManagers, sackings } = updateLeagueManagers(state.managers, state.clubIds, table, nextFixtures, matchday);
+    const { nextManagers: filledManagers, appointments } = fillStaleVacancies(nextManagers, state.clubIds, matchday, managerRandom);
     return {
-      nextState: { ...state, fixtures: nextFixtures, nextSeed: nextSeed + 2, managers: nextManagers, managerNews: [...sackings, ...state.managerNews] },
+      nextState: { ...state, fixtures: nextFixtures, nextSeed: nextSeed + 2, managers: filledManagers, managerNews: [...sackings, ...appointments, ...state.managerNews] },
       updatedAllSquads,
     };
   }

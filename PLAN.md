@@ -1769,3 +1769,86 @@ all 11 slots still fill with no player used twice). Live: injected a
 19-player squad with only 8 fit into localStorage, confirmed Coach's
 Help still reached "Starting XI: 11/11" and the advice panel correctly
 named the 6 injured players forced into the side.
+
+## Real managerial vacancies, a "view all managers" screen, and unsolicited job approaches
+
+User request: a screen to see every club's manager and job security,
+the sacked-player flow restricted to clubs with a genuine vacancy
+instead of an "any other club" heuristic, and a new "approached by
+another club" event when the player's doing well. All three turned out
+to need the same foundation: a sacking no longer instantly refills the
+job — it genuinely sits vacant (`ClubManagerState.name: string | null`)
+for `MANAGER_VACANCY_FILL_MATCHDAYS` (3) matchdays before an AI
+auto-fill, same as real managerial appointments taking a few weeks, not
+happening the same afternoon. The player's OWN old club goes through
+the exact same mechanic now (sacked or voluntarily leaving via an
+approach) — previously it got an instant special-cased AI replacement,
+which would've been the one inconsistent vacancy in the league once
+every other one became real and visible. `ManagerSackingEvent` was
+renamed `ManagerNewsEvent` since it now also carries appointment news
+(a vacancy being filled), not just sackings — exactly one of
+`outgoingName`/`incomingName` is ever null.
+
+**`pickSackedJobOffers`** (replacing the old flavor-only `pickJobOffers`)
+restricts the sacked-player overlay to clubs genuinely vacant in the
+same league. **The edge case this surfaced**: what if NONE are vacant
+the moment the player's sacked? Decided to never leave the player with
+zero options — falls back to exactly one random employed club, flagged
+`isExploratory` so `ManagerSackedScreen` can say so ("no club has an
+actual vacancy right now, but your agent's found you a way in anyway")
+rather than implying a real one. PLAN.md already established this game
+has no other hard "game over" state; a silently-empty offer list would
+have been the first one.
+
+**`checkForJobApproach`** (new) is the one genuinely voluntary way to
+leave a job without being sacked: gated on the player's own confidence
+being "Secure" (`MANAGER_SECURE_THRESHOLD = 45`, the same cutoff the
+header pill already used — moved into `engine/managers.ts` so "doing
+well" means one thing everywhere), their own tenure past its grace
+period (reusing `MANAGER_SACK_GRACE_MATCHDAYS` — even a high-confidence
+mid-season hire shouldn't be instantly poachable), a post-decline
+cooldown (`MANAGER_APPROACH_COOLDOWN_MATCHDAYS = 4`), at least one
+genuinely vacant same-league club, then a `MANAGER_APPROACH_CHANCE`
+(0.12 per eligible matchday) roll — rare enough to feel like an event,
+not a weekly nag. A new `ManagerApproachScreen` presents exactly one
+specific club's offer with a real Accept/Decline choice (unlike the
+sacked flow's forced pick). Both flows share one `handleTakeNewJob`
+helper in `CareerScreen.tsx` that reuses the existing remount-via-
+`key={club.id}` mechanism — accepting an approach is otherwise
+identical to accepting a sacked-offer, just voluntary.
+
+**New `ManagersScreen`** (a new CareerNav tab for the managed league,
+plus a Table/Managers toggle inside `OtherLeaguesScreen`'s per-league
+drill-down) — every club, its manager or "Vacant," and a job-security
+pill (`utils/managerDisplay.ts`'s `jobSecurityBand`, moved out of
+`CareerNav.tsx` so the header pill and this screen agree on what
+"Secure" means). Read-only — applying only ever happens as a reaction
+to being sacked, approaching only ever happens as an unsolicited
+overlay; neither is triggered from this screen.
+
+New/updated tests: `engine/__tests__/managers.test.ts` (30 tests —
+`updateLeagueManagers` now asserts a sacking produces `name: null` with
+no instant replacement and never decays an already-vacant club;
+`fillStaleVacancies` — no-op before the threshold, fills at/after it,
+never collides with an existing or same-round name; `pickSackedJobOffers`
+— vacancy-only when any exist, the exploratory fallback otherwise, never
+empty; `checkForJobApproach` — every gate individually, plus a
+long-running-seed sweep confirming it does eventually fire),
+`utils/__tests__/backgroundLeague.test.ts` (loosened to accept
+`name === null`, plus a new full-Championship-season assertion that
+both sacking and appointment news actually appear), `careerStorage.test.ts`
+(round-trips the three new optional fields). Full suite (157 tests),
+`tsc`, `eslint` all clean. Verified live: injected a genuine AI vacancy
+and confirmed it shows "Vacant" on the new Managers screen; forced a
+player sacking and confirmed the offer list contained exactly that one
+real vacancy, with the old club (Chelsea) then showing "Vacant" itself
+rather than an instant replacement; forced the all-employed edge case
+and confirmed the exploratory fallback copy and single offer; and
+— since a real 12%-per-matchday approach is impractical to hit by
+clicking through a career (same practical limit noted for the original
+sacking overlay) — temporarily forced `MANAGER_APPROACH_CHANCE` to `1`
+to confirm `ManagerApproachScreen` renders correctly and Decline
+resumes normal play with the cooldown field set, then reverted the
+constant before shipping (Accept reuses the exact same `handleTakeNewJob`
+function already proven correct via the sacked-flow test, so wasn't
+re-verified separately).

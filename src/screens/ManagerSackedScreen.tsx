@@ -18,12 +18,15 @@ export function ManagerSackedScreen({
   managerName,
   leagueName,
   offeredClubs,
+  isExploratory,
   onTakeJob,
 }: {
   oldClub: ClubListing;
   managerName: string;
   leagueName: string;
   offeredClubs: { club: ClubListing; position: number }[];
+  /** True when none of the offered clubs had a genuine vacancy — a guaranteed fallback so the player is never left with zero options (see PLAN.md). */
+  isExploratory: boolean;
   onTakeJob: (clubId: string) => void;
 }) {
   return (
@@ -39,7 +42,9 @@ export function ManagerSackedScreen({
       </div>
 
       <p className="mb-3 text-center text-sm text-white/80">
-        The phone's already ringing — a few {leagueName} clubs want to talk. Pick your next job.
+        {isExploratory
+          ? "No club in the league has an actual vacancy right now, but your agent's found you a way in anyway."
+          : `The phone's already ringing — a few ${leagueName} clubs want to talk. Pick your next job.`}
       </p>
 
       <div className="flex flex-col gap-3">

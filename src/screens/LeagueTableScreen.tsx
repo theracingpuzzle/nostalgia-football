@@ -3,7 +3,7 @@ import { ClubCrest } from '../components/ui/ClubCrest';
 import { Panel } from '../components/ui/Panel';
 import { ALL_CLUBS } from '../data/leagues';
 import type { LeagueDefinition } from '../data/leagues';
-import type { ManagerSackingEvent } from '../engine/managers';
+import type { ManagerNewsEvent } from '../engine/managers';
 import type { Fixture, LeagueTableRow, Player } from '../engine/types';
 import { getLeagueZone, zonesForTier, ZONE_STYLES } from '../utils/leagueZones';
 import { ClubOverviewScreen } from './ClubOverviewScreen';
@@ -22,10 +22,10 @@ export function LeagueTableScreen({
   fixtures: Fixture[];
   allSquads: Record<string, Player[]>;
   leagueTier: LeagueDefinition['tier'];
-  /** This league's managerial sackings, newest first — see engine/managers.ts. Omitted where a league doesn't have manager data wired up yet. */
-  managerNews?: ManagerSackingEvent[];
-  /** This league's current manager for a given club, if known. */
-  managerNameOf?: (clubId: string) => string | undefined;
+  /** This league's managerial news (sackings and appointments), newest first — see engine/managers.ts. Omitted where a league doesn't have manager data wired up yet. */
+  managerNews?: ManagerNewsEvent[];
+  /** This league's current manager for a given club — null means genuinely vacant, undefined means no manager data wired up for this league. */
+  managerNameOf?: (clubId: string) => string | null | undefined;
 }) {
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const selectedClub = selectedClubId ? ALL_CLUBS.find((c) => c.id === selectedClubId) : null;
@@ -40,9 +40,12 @@ export function LeagueTableScreen({
           <div className="flex flex-col gap-1 p-1 text-xs text-ink/80">
             {managerNews.slice(0, 5).map((event, i) => {
               const eventClub = ALL_CLUBS.find((c) => c.id === event.clubId);
+              const clubLabel = eventClub?.shortName ?? event.clubId;
               return (
                 <p key={`${event.clubId}-${event.matchday}-${i}`}>
-                  Matchday {event.matchday}: {eventClub?.shortName ?? event.clubId} sack {event.outgoingName}, appoint {event.incomingName}.
+                  {event.incomingName === null
+                    ? `Matchday ${event.matchday}: ${clubLabel} sack ${event.outgoingName} — the job's vacant.`
+                    : `Matchday ${event.matchday}: ${clubLabel} appoint ${event.incomingName}.`}
                 </p>
               );
             })}

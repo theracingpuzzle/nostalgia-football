@@ -59,13 +59,18 @@ describe('careerStorage', () => {
     expect(loadCareer()).toBeNull();
   });
 
-  it('round-trips the manager fields (job security, tenure, league managers, news, and a pending sacking)', () => {
+  it('round-trips the manager fields (job security, tenure, league managers, news, a pending sacking, and a pending approach)', () => {
     const save = makeSave({
-      leagueManagers: { chelsea: { name: 'Luiz Felipe Scolari', confidence: 40, tenureStartMatchday: 1 } },
+      leagueManagers: { chelsea: { name: null, confidence: 40, tenureStartMatchday: 25 }, everton: { name: 'David Moyes', confidence: 60, tenureStartMatchday: 1 } },
       managerJobSecurity: 32,
       managerTenureStartMatchday: 5,
-      managerNews: [{ clubId: 'chelsea', outgoingName: 'Luiz Felipe Scolari', incomingName: 'Guus Hiddink', matchday: 25 }],
-      sackedState: { offeredClubIds: ['fulham', 'everton'] },
+      managerNews: [
+        { clubId: 'chelsea', outgoingName: 'Luiz Felipe Scolari', incomingName: null, matchday: 25 },
+        { clubId: 'fulham', outgoingName: null, incomingName: 'Roy Hodgson', matchday: 28 },
+      ],
+      sackedState: { offeredClubIds: ['fulham', 'everton'], isExploratory: false },
+      managerApproachState: { clubId: 'everton' },
+      managerLastApproachMatchday: 30,
     });
     saveCareer(save);
     expect(loadCareer()).toEqual(save);
@@ -78,5 +83,7 @@ describe('careerStorage', () => {
     expect(loaded?.leagueManagers).toBeUndefined();
     expect(loaded?.managerJobSecurity).toBeUndefined();
     expect(loaded?.sackedState).toBeUndefined();
+    expect(loaded?.managerApproachState).toBeUndefined();
+    expect(loaded?.managerLastApproachMatchday).toBeUndefined();
   });
 });

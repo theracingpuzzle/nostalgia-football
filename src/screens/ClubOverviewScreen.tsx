@@ -37,8 +37,8 @@ export function ClubOverviewScreen({
   squad: Player[];
   fixtures: Fixture[];
   allSquads: Record<string, Player[]>;
-  /** This club's current manager, if known — see engine/managers.ts. Undefined for a league this screen doesn't have manager data wired up for yet. */
-  managerName?: string;
+  /** This club's current manager, if known — see engine/managers.ts. null explicitly means "genuinely vacant right now"; undefined means "no manager data wired up for this league yet." */
+  managerName?: string | null;
   /** True for the player's own club, so the manager line can say "(You)" instead of implying a separate AI manager. */
   isManagedByPlayer?: boolean;
   onClose: () => void;
@@ -79,10 +79,14 @@ export function ClubOverviewScreen({
               {zone && <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${ZONE_STYLES[zone].dot}`} />}
               {ordinal(leaguePosition)} of {totalClubs}
             </span>
-            {managerName && (
+            {managerName !== undefined && (
               <span className="block text-xs text-white/70">
-                Managed by {managerName}
-                {isManagedByPlayer && ' (You)'}
+                {managerName === null ? 'Vacant — no manager appointed' : (
+                  <>
+                    Managed by {managerName}
+                    {isManagedByPlayer && ' (You)'}
+                  </>
+                )}
               </span>
             )}
           </div>

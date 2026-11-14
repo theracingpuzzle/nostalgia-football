@@ -1,5 +1,5 @@
 import type { CareerScreenId } from '../components/layout/CareerNav';
-import type { ClubManagerState, ManagerSackingEvent } from '../engine/managers';
+import type { ClubManagerState, ManagerNewsEvent } from '../engine/managers';
 import type { PlayoffState } from '../engine/playoffs';
 import type { Fixture, Player } from '../engine/types';
 import type { TransferOffer, TransferTimelineEntry } from '../screens/TransferWindowScreen';
@@ -35,9 +35,19 @@ export interface CareerSaveData {
   /** The matchday the player's CURRENT job began — absent on an old save, treated as matchday 1 (so an old save's manager gets a fresh grace period rather than being instantly sackable). */
   managerTenureStartMatchday?: number;
   /** The managed league's own managerial news feed, newest first. */
-  managerNews?: ManagerSackingEvent[];
-  /** Set only while a sacking is awaiting the player's decision — resumable (reloading mid-decision shows the same offers, not a reroll). */
-  sackedState?: { offeredClubIds: string[] } | null;
+  managerNews?: ManagerNewsEvent[];
+  /**
+   * Set only while a sacking is awaiting the player's decision —
+   * resumable (reloading mid-decision shows the same offers, not a
+   * reroll). isExploratory means none of the offered clubs were
+   * genuinely vacant — a guaranteed fallback so the player is never left
+   * with zero options (see PLAN.md).
+   */
+  sackedState?: { offeredClubIds: string[]; isExploratory: boolean } | null;
+  /** Set only while an unsolicited approach from another club is awaiting the player's Accept/Decline — resumable, same as sackedState. */
+  managerApproachState?: { clubId: string } | null;
+  /** The matchday of the player's most recent approach (accepted, declined, or otherwise resolved) — drives MANAGER_APPROACH_COOLDOWN_MATCHDAYS. null/absent means "never approached yet." */
+  managerLastApproachMatchday?: number | null;
   screen: CareerScreenId;
   formationId: string;
   selectedXI: string[];

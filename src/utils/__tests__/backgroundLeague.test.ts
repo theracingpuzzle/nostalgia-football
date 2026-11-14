@@ -8,19 +8,22 @@ function clubIdsFor(leagueId: string): string[] {
   return LEAGUES.find((l) => l.id === leagueId)!.clubs.map((c) => c.id);
 }
 
-/** Every club has a named manager, and every managerNews entry (if any) refers to a real club and a matchday that actually happened this season. */
+/** Every club has a manager entry (employed with a real name, or genuinely vacant — both valid), and every managerNews entry (if any) refers to a real club, a matchday that actually happened this season, and exactly one of outgoingName/incomingName set. */
 function assertManagersAreWellFormed(state: BackgroundLeagueState, clubIds: string[]) {
   for (const clubId of clubIds) {
-    expect(state.managers[clubId]).toBeDefined();
-    expect(state.managers[clubId].name.trim().length).toBeGreaterThan(0);
+    const manager = state.managers[clubId];
+    expect(manager).toBeDefined();
+    if (manager.name !== null) expect(manager.name.trim().length).toBeGreaterThan(0);
+    expect(typeof manager.confidence).toBe('number');
+    expect(typeof manager.tenureStartMatchday).toBe('number');
   }
   const totalMatchdays = Math.max(0, ...state.fixtures.map((f) => f.matchday));
   for (const event of state.managerNews) {
     expect(clubIds).toContain(event.clubId);
     expect(event.matchday).toBeGreaterThanOrEqual(1);
     expect(event.matchday).toBeLessThanOrEqual(totalMatchdays + 20); // +20 covers the playoff's own extra matchdays, which aren't in `fixtures`
-    expect(event.outgoingName.trim().length).toBeGreaterThan(0);
-    expect(event.incomingName.trim().length).toBeGreaterThan(0);
+    expect(event.outgoingName === null || event.incomingName === null).toBe(true);
+    expect(event.outgoingName !== null || event.incomingName !== null).toBe(true);
   }
 }
 
@@ -115,6 +118,16 @@ describe('fastForwardBackgroundLeagueSeason', () => {
     expect(isBackgroundLeagueSeasonComplete(nextState)).toBe(true);
     assertManagersAreWellFormed(nextState, clubIds);
   });
+
+  it('produces both sacking news (incomingName null) and appointment news (outgoingName null) over a full 46-matchday Championship season', () => {
+    const clubIds = clubIdsFor('championship');
+    const state = createBackgroundLeagueState('championship', clubIds, 1);
+    const { nextState } = fastForwardBackgroundLeagueSeason(state, SQUADS_BY_CLUB_ID);
+
+    assertManagersAreWellFormed(nextState, clubIds);
+    expect(nextState.managerNews.some((e) => e.incomingName === null)).toBe(true);
+    expect(nextState.managerNews.some((e) => e.outgoingName === null)).toBe(true);
+  });
 });
 
 describe('createBackgroundLeagueState manager seeding', () => {
@@ -124,7 +137,8 @@ describe('createBackgroundLeagueState manager seeding', () => {
     for (const clubId of clubIds) {
       expect(state.managers[clubId].confidence).toBe(MANAGER_STARTING_CONFIDENCE);
       expect(state.managers[clubId].tenureStartMatchday).toBe(1);
-      expect(state.managers[clubId].name.trim().length).toBeGreaterThan(0);
+      expect(state.managers[clubId].name).not.toBeNull(); // every club starts employed, never vacant
+      expect(state.managers[clubId].name?.trim().length).toBeGreaterThan(0);
     }
     expect(state.managerNews).toEqual([]);
   });

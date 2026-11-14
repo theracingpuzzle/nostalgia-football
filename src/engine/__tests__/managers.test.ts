@@ -2,18 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { createRandom } from '../rng';
 import { PLACEHOLDER_MANAGER_POOL } from '../../data/managers0809';
 import {
+  MANAGER_APPROACH_COOLDOWN_MATCHDAYS,
   MANAGER_SACK_GRACE_MATCHDAYS,
   MANAGER_SACK_THRESHOLD,
+  MANAGER_SECURE_THRESHOLD,
   MANAGER_STARTING_CONFIDENCE,
+  MANAGER_VACANCY_FILL_MATCHDAYS,
+  checkForJobApproach,
   computeNextConfidence,
   createClubManagers,
+  fillStaleVacancies,
   isSackWorthy,
-  pickJobOffers,
   pickReplacementManagerName,
+  pickSackedJobOffers,
   recentFormScore,
   updateLeagueManagers,
+  vacantClubIds,
   type ClubManagerState,
-  type ManagerSackingEvent,
 } from '../managers';
 import type { Fixture, LeagueTableRow, MatchResult } from '../types';
 
@@ -124,46 +129,116 @@ describe('updateLeagueManagers', () => {
     const managers = baseManagers(1);
     const table = [row('b'), row('c'), row('d'), row('a')]; // 'a' last
     const fixtures = [playedFixture('f1', 2, 'a', 'b', 0, 5)];
-    const { sackings } = updateLeagueManagers(managers, clubIds, table, fixtures, 2, createRandom(1));
+    const { sackings } = updateLeagueManagers(managers, clubIds, table, fixtures, 2);
     expect(sackings).toEqual([]);
   });
 
-  it('eventually sacks a club stuck bottom-of-table on a losing streak, once past the grace period', () => {
+  it('eventually sacks a club stuck bottom-of-table on a losing streak, making it genuinely vacant (not an instant replacement)', () => {
     let managers = baseManagers(1);
-    const random = createRandom(42);
-    let sackingsSeen: string[] = [];
+    let sackingEvent: { clubId: string; outgoingName: string | null; incomingName: string | null } | undefined;
     const allFixtures: Fixture[] = []; // accumulates across matchdays, same as a real career's fixtures list
 
-    for (let matchday = 2; matchday <= 40 && sackingsSeen.length === 0; matchday++) {
+    for (let matchday = 2; matchday <= 40 && !sackingEvent; matchday++) {
       const table = [row('b'), row('c'), row('d'), row('a')]; // 'a' always last
       allFixtures.push(playedFixture(`f${matchday}`, matchday, 'a', 'b', 0, 5));
-      const result = updateLeagueManagers(managers, clubIds, table, allFixtures, matchday, random);
+      const result = updateLeagueManagers(managers, clubIds, table, allFixtures, matchday);
       managers = result.nextManagers;
-      sackingsSeen = result.sackings.map((s) => s.clubId);
+      sackingEvent = result.sackings.find((s) => s.clubId === 'a');
     }
 
-    expect(sackingsSeen).toContain('a');
-    // the replacement never has a blank name, and isn't literally the same outgoing name
-    const replaced = managers['a'];
-    expect(replaced.name.trim().length).toBeGreaterThan(0);
-    expect(replaced.name).not.toBe('Manager-a');
-    expect(replaced.confidence).toBe(MANAGER_STARTING_CONFIDENCE);
+    expect(sackingEvent?.outgoingName).toBe('Manager-a');
+    expect(sackingEvent?.incomingName).toBeNull();
+    expect(managers['a'].name).toBeNull(); // genuinely vacant, no instant replacement
   });
 
-  it('never assigns the same replacement name to two different clubs sacked in the same round', () => {
-    // Set up every club already below the threshold and past its grace period, so a single call sacks all four at once.
-    const managers: Record<string, ClubManagerState> = Object.fromEntries(
-      clubIds.map((id) => [id, { name: `Manager-${id}`, confidence: 1, tenureStartMatchday: 1 }]),
-    );
+  it('never decays a club that is already vacant', () => {
+    const managers: Record<string, ClubManagerState> = { ...baseManagers(1), a: { name: null, confidence: 42, tenureStartMatchday: 1 } };
+    const table = [row('a'), row('b'), row('c'), row('d')]; // 'a' top of the table, which would otherwise boost confidence
+    const fixtures = [playedFixture('f1', 10, 'a', 'b', 5, 0)]; // and winning big, which would otherwise boost form
+    const { nextManagers } = updateLeagueManagers(managers, clubIds, table, fixtures, 10);
+    expect(nextManagers['a']).toEqual({ name: null, confidence: 42, tenureStartMatchday: 1 });
+  });
+
+  it('sacks every club crossing the threshold in the same call, all becoming vacant', () => {
+    const managers: Record<string, ClubManagerState> = Object.fromEntries(clubIds.map((id) => [id, { name: `Manager-${id}`, confidence: 1, tenureStartMatchday: 1 }]));
     const table = clubIds.map(row);
     const fixtures: Fixture[] = [];
     const matchday = 1 + MANAGER_SACK_GRACE_MATCHDAYS;
 
-    const { sackings } = updateLeagueManagers(managers, clubIds, table, fixtures, matchday, createRandom(7));
+    const { nextManagers, sackings } = updateLeagueManagers(managers, clubIds, table, fixtures, matchday);
 
-    expect(sackings.length).toBe(clubIds.length); // confirms the scenario really did sack everyone at once, not a weaker case
-    const incomingNames = sackings.map((s) => s.incomingName);
-    expect(new Set(incomingNames).size).toBe(incomingNames.length);
+    expect(sackings.length).toBe(clubIds.length);
+    for (const id of clubIds) expect(nextManagers[id].name).toBeNull();
+  });
+});
+
+describe('fillStaleVacancies', () => {
+  const clubIds = ['a', 'b', 'c', 'd'];
+
+  it('is a no-op before the fill threshold', () => {
+    const managers: Record<string, ClubManagerState> = {
+      a: { name: null, confidence: 0, tenureStartMatchday: 5 },
+      b: { name: 'Manager-b', confidence: 55, tenureStartMatchday: 1 },
+      c: { name: 'Manager-c', confidence: 55, tenureStartMatchday: 1 },
+      d: { name: 'Manager-d', confidence: 55, tenureStartMatchday: 1 },
+    };
+    const matchday = 5 + MANAGER_VACANCY_FILL_MATCHDAYS - 1; // one short of the threshold
+    const { nextManagers, appointments } = fillStaleVacancies(managers, clubIds, matchday, createRandom(1));
+    expect(appointments).toEqual([]);
+    expect(nextManagers['a'].name).toBeNull();
+  });
+
+  it('fills a vacancy exactly at the threshold, with a fresh name and full confidence', () => {
+    const managers: Record<string, ClubManagerState> = {
+      a: { name: null, confidence: 0, tenureStartMatchday: 5 },
+      b: { name: 'Manager-b', confidence: 55, tenureStartMatchday: 1 },
+      c: { name: 'Manager-c', confidence: 55, tenureStartMatchday: 1 },
+      d: { name: 'Manager-d', confidence: 55, tenureStartMatchday: 1 },
+    };
+    const matchday = 5 + MANAGER_VACANCY_FILL_MATCHDAYS;
+    const { nextManagers, appointments } = fillStaleVacancies(managers, clubIds, matchday, createRandom(1));
+    expect(appointments).toHaveLength(1);
+    expect(appointments[0]).toMatchObject({ clubId: 'a', outgoingName: null, matchday });
+    expect(nextManagers['a'].name).not.toBeNull();
+    expect(nextManagers['a'].confidence).toBe(MANAGER_STARTING_CONFIDENCE);
+    expect(nextManagers['a'].tenureStartMatchday).toBe(matchday);
+  });
+
+  it('never assigns a name already employed elsewhere in clubIds', () => {
+    const employedName = PLACEHOLDER_MANAGER_POOL[0];
+    const managers: Record<string, ClubManagerState> = {
+      a: { name: null, confidence: 0, tenureStartMatchday: 1 },
+      b: { name: employedName, confidence: 55, tenureStartMatchday: 1 },
+      c: { name: 'Manager-c', confidence: 55, tenureStartMatchday: 1 },
+      d: { name: 'Manager-d', confidence: 55, tenureStartMatchday: 1 },
+    };
+    const matchday = 1 + MANAGER_VACANCY_FILL_MATCHDAYS;
+    const { nextManagers } = fillStaleVacancies(managers, clubIds, matchday, createRandom(2));
+    expect(nextManagers['a'].name).not.toBe(employedName);
+  });
+
+  it('never assigns the same name to two vacancies filled in the same call', () => {
+    const managers: Record<string, ClubManagerState> = {
+      a: { name: null, confidence: 0, tenureStartMatchday: 1 },
+      b: { name: null, confidence: 0, tenureStartMatchday: 1 },
+      c: { name: 'Manager-c', confidence: 55, tenureStartMatchday: 1 },
+      d: { name: 'Manager-d', confidence: 55, tenureStartMatchday: 1 },
+    };
+    const matchday = 1 + MANAGER_VACANCY_FILL_MATCHDAYS;
+    const { nextManagers } = fillStaleVacancies(managers, clubIds, matchday, createRandom(3));
+    expect(nextManagers['a'].name).not.toBeNull();
+    expect(nextManagers['b'].name).not.toBeNull();
+    expect(nextManagers['a'].name).not.toBe(nextManagers['b'].name);
+  });
+});
+
+describe('vacantClubIds', () => {
+  it('returns only the genuinely vacant clubs', () => {
+    const managers: Record<string, ClubManagerState> = {
+      a: { name: null, confidence: 0, tenureStartMatchday: 1 },
+      b: { name: 'Manager-b', confidence: 55, tenureStartMatchday: 1 },
+    };
+    expect(vacantClubIds(managers, ['a', 'b'])).toEqual(['a']);
   });
 });
 
@@ -185,31 +260,76 @@ describe('pickReplacementManagerName', () => {
   });
 });
 
-describe('pickJobOffers', () => {
+describe('pickSackedJobOffers', () => {
   const leagueClubIds = ['a', 'b', 'c', 'd', 'e', 'f'];
 
-  it('never offers the club that just did the sacking', () => {
-    const offers = pickJobOffers(leagueClubIds, 'a', [], createRandom(1));
-    expect(offers).not.toContain('a');
+  function managersWithVacant(vacantIds: string[]): Record<string, ClubManagerState> {
+    return Object.fromEntries(leagueClubIds.map((id) => [id, vacantIds.includes(id) ? { name: null, confidence: 0, tenureStartMatchday: 1 } : { name: `Manager-${id}`, confidence: 55, tenureStartMatchday: 1 }]));
+  }
+
+  it('only offers genuinely vacant clubs when any exist, and never includes excludeClubId', () => {
+    const managers = managersWithVacant(['c', 'd', 'e']);
+    const { offeredClubIds, isExploratory } = pickSackedJobOffers(managers, leagueClubIds, 'a', createRandom(1));
+    expect(isExploratory).toBe(false);
+    expect(offeredClubIds).not.toContain('a');
+    for (const id of offeredClubIds) expect(['c', 'd', 'e']).toContain(id);
   });
 
-  it('never offers a club from outside the given league', () => {
-    const offers = pickJobOffers(leagueClubIds, 'a', [], createRandom(1), 10);
-    for (const id of offers) expect(leagueClubIds).toContain(id);
+  it('falls back to exactly one exploratory offer when nothing is vacant', () => {
+    const managers = managersWithVacant([]);
+    const { offeredClubIds, isExploratory } = pickSackedJobOffers(managers, leagueClubIds, 'a', createRandom(1));
+    expect(isExploratory).toBe(true);
+    expect(offeredClubIds).toHaveLength(1);
+    expect(offeredClubIds[0]).not.toBe('a');
   });
 
-  it('prefers clubs that just had an AI vacancy, before falling back to the rest', () => {
-    const news: ManagerSackingEvent[] = [
-      { clubId: 'd', outgoingName: 'X', incomingName: 'Y', matchday: 10 },
-      { clubId: 'e', outgoingName: 'X', incomingName: 'Y', matchday: 10 },
-    ];
-    const offers = pickJobOffers(leagueClubIds, 'a', news, createRandom(1), 2);
-    expect(offers.sort()).toEqual(['d', 'e']);
+  it('never returns an empty offer list, even with only two clubs in the league', () => {
+    const managers: Record<string, ClubManagerState> = {
+      a: { name: 'Manager-a', confidence: 55, tenureStartMatchday: 1 },
+      b: { name: 'Manager-b', confidence: 55, tenureStartMatchday: 1 },
+    };
+    const { offeredClubIds } = pickSackedJobOffers(managers, ['a', 'b'], 'a', createRandom(1));
+    expect(offeredClubIds.length).toBeGreaterThan(0);
+  });
+});
+
+describe('checkForJobApproach', () => {
+  const vacant = ['x'];
+
+  it('is null below the secure threshold', () => {
+    expect(checkForJobApproach(MANAGER_SECURE_THRESHOLD - 1, 20, 1, null, vacant, createRandom(1))).toBeNull();
   });
 
-  it('never returns duplicate clubs even when a recently-vacant club is also in the shuffled fallback pool', () => {
-    const news: ManagerSackingEvent[] = [{ clubId: 'b', outgoingName: 'X', incomingName: 'Y', matchday: 10 }];
-    const offers = pickJobOffers(leagueClubIds, 'a', news, createRandom(1), 6);
-    expect(new Set(offers).size).toBe(offers.length);
+  it('is null with no vacant candidates', () => {
+    expect(checkForJobApproach(100, 20, 1, null, [], createRandom(1))).toBeNull();
+  });
+
+  it('is null inside the player\'s own tenure grace period', () => {
+    expect(checkForJobApproach(100, 3, 1, null, vacant, createRandom(1))).toBeNull();
+  });
+
+  it('is null inside the post-decline cooldown', () => {
+    const matchday = 20;
+    expect(checkForJobApproach(100, matchday, 1, matchday - MANAGER_APPROACH_COOLDOWN_MATCHDAYS + 1, vacant, createRandom(1))).toBeNull();
+  });
+
+  it('is allowed again once the cooldown has fully elapsed', () => {
+    const matchday = 20;
+    // Run many seeds — some will roll above MANAGER_APPROACH_CHANCE and return null, but none should be blocked by the cooldown itself.
+    let everFired = false;
+    for (let seed = 1; seed < 200; seed++) {
+      const result = checkForJobApproach(100, matchday, 1, matchday - MANAGER_APPROACH_COOLDOWN_MATCHDAYS, vacant, createRandom(seed));
+      if (result !== null) everFired = true;
+    }
+    expect(everFired).toBe(true);
+  });
+
+  it('eventually fires given enough eligible matchdays, respecting MANAGER_APPROACH_CHANCE', () => {
+    const random = createRandom(123);
+    let fired: string | null = null;
+    for (let matchday = 10; matchday <= 200 && fired === null; matchday++) {
+      fired = checkForJobApproach(100, matchday, 1, null, vacant, random);
+    }
+    expect(fired).toBe('x');
   });
 });
