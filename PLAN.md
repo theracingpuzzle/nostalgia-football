@@ -1873,3 +1873,50 @@ Verified live: an old save (predating this field) correctly showed
 updated the header to "Season 2" immediately. New
 `careerStorage.test.ts` round-trip test; full suite, `tsc`, `eslint`
 clean.
+
+## Fixed: a club could end up in two leagues at once after a season, doubling its fixtures
+
+Bug report: after one season, a club could appear in two leagues
+simultaneously, and that club would end up playing roughly double its
+normal number of games.
+
+Root cause: `CareerScreen.tsx`'s `startNewSeason()` applies
+`computePyramidTransition` (see `utils/pyramid.ts`/`ENGLISH_PYRAMID`)
+once per adjacent pair in the pyramid chain — Premier
+League/Championship, then Championship/League One, then League
+One/League Two — in a single loop. The Championship and League One
+each sit in the MIDDLE of that chain: each is the "lower" league for
+one boundary and the "upper" league for the next. The loop fed
+`computePyramidTransition` each boundary's club list from `outcomeFor`,
+which always returns a league's ORIGINAL, season-start roster — never
+the roster already updated by an earlier iteration in the same loop.
+So when the Championship/League One boundary ran right after the
+Premier League/Championship boundary had already updated the
+Championship's roster, it overwrote that update with a transition
+computed from the stale, pre-promotion Championship list — clobbering
+the first boundary's result. Net effect: a club promoted out of the
+Championship into the Premier League stayed listed in the Premier
+League (correctly) but ALSO reappeared in the Championship's list
+(from the clobbered second boundary), i.e. the same club in two
+leagues. Since each league generates its own fixtures independently
+from its own club list (`generateFixtures` / `createBackgroundLeagueState`),
+that club then got two separate fixture schedules — the reported
+"double games."
+
+Fix: the loop now threads each boundary's OUTPUT roster into the next
+boundary's INPUT for any league the two boundaries share, falling back
+to `outcomeFor`'s original list only the first time a league is
+touched. The *table* values driving promotion/relegation zone
+decisions still come straight from `outcomeFor` regardless — final
+league standings aren't affected by a neighboring boundary, only
+roster membership is, so there was never a need to touch those.
+
+Verified: new `pyramid.test.ts` suite ("three-boundary pyramid chain")
+runs the real three-boundary chain (the same accumulation logic
+`startNewSeason()` now uses) across a realistic shared club universe
+and asserts no club ever appears in more than one league's final
+roster, every league keeps its original club count, and each real
+promotion/relegation (Championship→Premier League, League One→
+Championship, League Two→League One, and the reverse relegations)
+actually lands where expected. Full suite (164 tests), `tsc`, `eslint`
+clean.

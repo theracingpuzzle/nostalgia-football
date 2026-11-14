@@ -1016,7 +1016,27 @@ export function CareerScreen({
       const upper = outcomeFor(upperLeagueId);
       const lower = outcomeFor(lowerLeagueId);
       if (lower.playoffWinnerClubId) {
-        const { nextUpperClubIds, nextLowerClubIds } = computePyramidTransition(upper.clubIds, lower.clubIds, upper.table, lower.table, lower.playoffWinnerClubId, upperTier, lowerTier);
+        // Use each league's roster as already updated by an earlier boundary
+        // in this same loop (e.g. league-one's roster after the
+        // championship<->league-one boundary already removed/added clubs
+        // from the championship<->premier-league boundary above it) rather
+        // than outcomeFor's frozen season-start clubIds — otherwise this
+        // iteration's write clobbers the previous one's promotions/
+        // relegations for the league shared between both boundaries,
+        // leaving a club listed in two leagues at once. The *table* values
+        // stay from outcomeFor regardless: final standings aren't affected
+        // by other boundaries, only club-list membership is.
+        const currentUpperClubIds = nextLeagueClubIds[upperLeagueId] ?? upper.clubIds;
+        const currentLowerClubIds = nextLeagueClubIds[lowerLeagueId] ?? lower.clubIds;
+        const { nextUpperClubIds, nextLowerClubIds } = computePyramidTransition(
+          currentUpperClubIds,
+          currentLowerClubIds,
+          upper.table,
+          lower.table,
+          lower.playoffWinnerClubId,
+          upperTier,
+          lowerTier,
+        );
         nextLeagueClubIds = { ...nextLeagueClubIds, [upperLeagueId]: nextUpperClubIds, [lowerLeagueId]: nextLowerClubIds };
       }
     }

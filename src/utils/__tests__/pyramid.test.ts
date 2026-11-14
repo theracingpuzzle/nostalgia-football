@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getLeagueZone } from '../leagueZones';
-import { computePyramidTransition } from '../pyramid';
+import { computePyramidTransition, ENGLISH_PYRAMID } from '../pyramid';
 import type { LeagueTableRow } from '../../engine/types';
 
 function row(clubId: string): LeagueTableRow {
@@ -105,5 +105,106 @@ describe('computePyramidTransition — League One <-> League Two (different shap
 
     expect(result.relegatedFromUpper.sort()).toEqual(expectedRelegated.sort());
     expect(result.promotedFromLower.sort()).toEqual([...expectedAutoPromoted, 'l2-6'].sort());
+  });
+});
+
+/**
+ * Regression test for the "a club ends up in two leagues at once" bug:
+ * CareerScreen's startNewSeason() applies computePyramidTransition across
+ * ENGLISH_PYRAMID's three adjacent boundaries in one pass, and Championship
+ * and League One each sit in the MIDDLE of that chain — they're the
+ * "lower" league for one boundary and the "upper" league for the next. If
+ * each boundary is fed the original, season-start club lists instead of
+ * the roster already updated by the previous boundary, the later boundary
+ * clobbers the earlier one's promotions/relegations for the shared league,
+ * leaving a club listed in two leagues' final rosters simultaneously (and,
+ * since fixtures are generated per-league from that list, playing two
+ * independent fixture schedules). This test runs the same three-boundary
+ * chain CareerScreen runs, across a realistic shared club universe, and
+ * asserts no club is ever double-counted and every league ends up the
+ * right size.
+ */
+describe('three-boundary pyramid chain (regression: no club should ever end up in two leagues)', () => {
+  const tierByLeagueId: Record<string, 'top' | 'second' | 'third' | 'fourth'> = {
+    'premier-league': 'top',
+    championship: 'second',
+    'league-one': 'third',
+    'league-two': 'fourth',
+  };
+
+  function runFullChain(clubIdsByLeague: Record<string, string[]>, playoffWinnerByLowerLeague: Record<string, string>) {
+    const tableByLeague: Record<string, LeagueTableRow[]> = Object.fromEntries(
+      Object.entries(clubIdsByLeague).map(([leagueId, ids]) => [leagueId, ids.map(row)]),
+    );
+
+    let nextLeagueClubIds: Record<string, string[]> = clubIdsByLeague;
+    for (let i = 0; i < ENGLISH_PYRAMID.length - 1; i++) {
+      const upperLeagueId = ENGLISH_PYRAMID[i];
+      const lowerLeagueId = ENGLISH_PYRAMID[i + 1];
+      const playoffWinnerClubId = playoffWinnerByLowerLeague[lowerLeagueId];
+      if (!playoffWinnerClubId) continue;
+
+      const currentUpperClubIds = nextLeagueClubIds[upperLeagueId] ?? clubIdsByLeague[upperLeagueId];
+      const currentLowerClubIds = nextLeagueClubIds[lowerLeagueId] ?? clubIdsByLeague[lowerLeagueId];
+      const { nextUpperClubIds, nextLowerClubIds } = computePyramidTransition(
+        currentUpperClubIds,
+        currentLowerClubIds,
+        tableByLeague[upperLeagueId],
+        tableByLeague[lowerLeagueId],
+        playoffWinnerClubId,
+        tierByLeagueId[upperLeagueId],
+        tierByLeagueId[lowerLeagueId],
+      );
+      nextLeagueClubIds = { ...nextLeagueClubIds, [upperLeagueId]: nextUpperClubIds, [lowerLeagueId]: nextLowerClubIds };
+    }
+    return nextLeagueClubIds;
+  }
+
+  const clubIdsByLeague = {
+    'premier-league': makeIds('pl', 20),
+    championship: makeIds('ch', 24),
+    'league-one': makeIds('l1', 24),
+    'league-two': makeIds('l2', 24),
+  };
+  const playoffWinnerByLowerLeague = { championship: 'ch-5', 'league-one': 'l1-4', 'league-two': 'l2-6' };
+
+  const result = runFullChain(clubIdsByLeague, playoffWinnerByLowerLeague);
+
+  it('no club appears in more than one league\'s final roster', () => {
+    const allIds = Object.values(result).flat();
+    const uniqueIds = new Set(allIds);
+    expect(uniqueIds.size).toBe(allIds.length);
+  });
+
+  it('every league keeps its original club count', () => {
+    for (const leagueId of ENGLISH_PYRAMID) {
+      expect(result[leagueId]).toHaveLength(clubIdsByLeague[leagueId as keyof typeof clubIdsByLeague].length);
+    }
+  });
+
+  it('clubs promoted out of the Championship actually land in the Premier League, not left behind', () => {
+    expect(result['premier-league']).toContain('ch-1');
+    expect(result['premier-league']).toContain('ch-5'); // the playoff winner
+    expect(result.championship).not.toContain('ch-1');
+    expect(result.championship).not.toContain('ch-5');
+  });
+
+  it('clubs promoted from League One into the Championship backfill the Championship spots vacated by its own promotions, not duplicate them', () => {
+    expect(result.championship).toContain('l1-1');
+    expect(result.championship).toContain('l1-4'); // the playoff winner
+    expect(result['league-one']).not.toContain('l1-1');
+    expect(result['league-one']).not.toContain('l1-4');
+  });
+
+  it('clubs relegated from the Premier League land in the Championship, and clubs relegated from the Championship land in League One', () => {
+    expect(result.championship).toContain('pl-18');
+    expect(result['league-one']).toContain('ch-22');
+  });
+
+  it('clubs promoted from League Two land in League One', () => {
+    expect(result['league-one']).toContain('l2-1');
+    expect(result['league-one']).toContain('l2-6'); // the playoff winner
+    expect(result['league-two']).not.toContain('l2-1');
+    expect(result['league-two']).not.toContain('l2-6');
   });
 });
