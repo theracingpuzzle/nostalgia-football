@@ -65,7 +65,7 @@ export function MatchResultScreen({ fixture, onContinue }: { fixture: Fixture; o
       <h2 className="mb-1 text-center text-xl font-black uppercase tracking-wide text-white">Full Time</h2>
       {homeClub && (
         <p className="mb-3 text-center text-xs text-white/60">
-          {homeClub.stadiumName} · Attendance {computeAttendance(fixture.id, homeClub.stadiumCapacity).toLocaleString()}
+          {fixture.id === 'final' ? 'Wembley Stadium' : homeClub.stadiumName} · Attendance {computeAttendance(fixture.id, homeClub.stadiumCapacity).toLocaleString()}
         </p>
       )}
 

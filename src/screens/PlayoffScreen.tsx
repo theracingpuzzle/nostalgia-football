@@ -89,7 +89,19 @@ function TieCard({ tie, winnerClubId, label }: { tie: TwoLegTie; winnerClubId: s
  * moves straight on to SeasonSummaryScreen for the actual "promoted!"/"so
  * close" headline, so there's no "continue" step in here.
  */
-export function PlayoffScreen({ playoff, onPlayNext }: { playoff: PlayoffState; onPlayNext: () => void }) {
+export function PlayoffScreen({
+  playoff,
+  onPlayNext,
+  onSelectTeam,
+  xiReady,
+}: {
+  playoff: PlayoffState;
+  onPlayNext: () => void;
+  /** Steps out to the normal Team Selection screen — see CareerScreen's showPlayoffTeamSelect. */
+  onSelectTeam: () => void;
+  /** Same "11 players picked" gate FixturesScreen uses for a regular fixture — mirrored here so a playoff leg can't kick off with an incomplete XI either. */
+  xiReady: boolean;
+}) {
   const everythingPlayedForNow =
     playoff.semiFinal1.leg1.played && playoff.semiFinal1.leg2.played && playoff.semiFinal2.leg1.played && playoff.semiFinal2.leg2.played && (!playoff.final || playoff.final.played);
 
@@ -111,7 +123,12 @@ export function PlayoffScreen({ playoff, onPlayNext }: { playoff: PlayoffState; 
       )}
 
       <div className="flex justify-center gap-2">
-        <Button onClick={onPlayNext}>{everythingPlayedForNow ? 'Resolve Tie' : 'Play Next Leg'}</Button>
+        <Button variant="secondary" onClick={onSelectTeam}>
+          Select Team
+        </Button>
+        <Button onClick={onPlayNext} disabled={!xiReady} title={xiReady ? undefined : 'Pick a full Starting XI first'}>
+          {everythingPlayedForNow ? 'Resolve Tie' : 'Play Next Leg'}
+        </Button>
       </div>
     </div>
   );

@@ -1920,3 +1920,40 @@ promotion/relegation (Championship→Premier League, League One→
 Championship, League Two→League One, and the reverse relegations)
 actually lands where expected. Full suite (164 tests), `tsc`, `eslint`
 clean.
+
+## Added: team selection for playoff legs/final, not just regular fixtures
+
+Bug report: clicking "Play Next Leg"/"Resolve Tie" on the Championship
+promotion playoff overlay went straight into the match, with no chance
+to change formation/XI first — unlike a regular fixture, which always
+goes through Team Selection first.
+
+Root cause: `PlayoffScreen`'s overlay renders as a full-screen layer
+(`fixed inset-0 z-50`) on top of the persistent `CareerNav`/
+`TeamSelectionScreen` tree, and its "Play Next Leg" button called
+`advanceManagedPlayoff` directly — whatever `selectedXI`/`formationId`
+happened to still be set in state from the end of the regular season
+was simply reused, with no way to reach Team Selection while the
+overlay was up.
+
+Fix: `PlayoffScreen` gained a `Select Team` button alongside Play Next
+Leg/Resolve Tie (now disabled until `selectedXI.length === 11`, the
+same `xiReady` gate `FixturesScreen` already uses for a regular
+fixture). Selecting it sets a new transient `showPlayoffTeamSelect`
+flag and switches to the `'team'` screen; while that flag is set, the
+playoff overlay condition in `CareerScreen` is suppressed, so the
+normal persistent `CareerNav`/`TeamSelectionScreen` becomes visible
+underneath exactly as it would mid-season — reusing that screen rather
+than mounting a second one, since it carries the only copy of
+formation/slot state and isn't designed to accept it as a prop.
+`TeamSelectionScreen`'s `Continue` button now clears the flag (back to
+the playoff overlay) instead of always navigating to `'fixtures'` when
+it was opened for this reason.
+
+Verified live via localStorage injection: seeded a `managedPlayoff`
+with an unplayed semi-final leg and an empty `selectedXI`, confirmed
+the overlay showed "Select Team" with "Play Next Leg" correctly
+disabled (0/11), clicking Select Team opened the full persistent Team
+Selection screen (nav and all), Coach's Help filled the XI to 11/11,
+and Continue returned to the playoff overlay with Play Next Leg now
+enabled. Full suite, `tsc`, `eslint` clean.

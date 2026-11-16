@@ -445,7 +445,7 @@ export function MatchAnimationScreen({
           />
         </div>
         <div className="px-1 pb-1 text-center text-[11px] text-ink/60">
-          {homeClub.stadiumName} · Attendance {computeAttendance(fixtureId, homeClub.stadiumCapacity).toLocaleString()}
+          {applyHomeAdvantage ? homeClub.stadiumName : 'Wembley Stadium'} · Attendance {computeAttendance(fixtureId, homeClub.stadiumCapacity).toLocaleString()}
         </div>
       </Panel>
 

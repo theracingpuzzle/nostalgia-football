@@ -439,6 +439,12 @@ export function CareerScreen({
   // replaying that one fixture fresh rather than resurrecting a half-played
   // match, which isn't worth the complexity of serializing.
   const [liveMatch, setLiveMatch] = useState<LiveMatchSetup | null>(null);
+  // True while the player has stepped out of the PlayoffScreen overlay to
+  // revisit Team Selection before a playoff leg/final — lets them change
+  // formation/XI the same way they can for a regular fixture, instead of
+  // advanceManagedPlayoff silently reusing whatever was last selected.
+  // Not persisted — same reasoning as showingAnimation above.
+  const [showPlayoffTeamSelect, setShowPlayoffTeamSelect] = useState(false);
 
   // Every league other than the one being managed, simulating its own
   // season fully automatically alongside this one (see
@@ -1153,8 +1159,18 @@ export function CareerScreen({
         onDecline={() => setManagerApproachState(null)}
       />
     ) : null;
-  } else if (managedPlayoff && !managedPlayoff.championClubId && managedClubStillInPlayoff(managedPlayoff, club.id)) {
-    overlay = <PlayoffScreen playoff={managedPlayoff} onPlayNext={advanceManagedPlayoff} />;
+  } else if (managedPlayoff && !managedPlayoff.championClubId && managedClubStillInPlayoff(managedPlayoff, club.id) && !showPlayoffTeamSelect) {
+    overlay = (
+      <PlayoffScreen
+        playoff={managedPlayoff}
+        onPlayNext={advanceManagedPlayoff}
+        xiReady={selectedXI.length === 11}
+        onSelectTeam={() => {
+          setScreen('team');
+          setShowPlayoffTeamSelect(true);
+        }}
+      />
+    );
   } else if (fullSeasonComplete && !seasonSummaryDismissed) {
     overlay = (
       <SeasonSummaryScreen
@@ -1206,7 +1222,7 @@ export function CareerScreen({
             setFormationId(nextFormationId);
             setSelectedXI(xiIds);
           }}
-          onContinue={() => setScreen('fixtures')}
+          onContinue={() => (showPlayoffTeamSelect ? setShowPlayoffTeamSelect(false) : setScreen('fixtures'))}
         />
       </div>
 
