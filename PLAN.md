@@ -2302,3 +2302,26 @@ confirmed the season summary now shows "Relegated — Down to League
 One next season" instead of the old disclaimer, and confirmed
 clicking "Start Season 2" correctly moved the club into League One
 with a `relegated-real`-tagged Career Overview entry.
+
+## Added: a "Clear Team" button on Team Selection
+
+Feature request: a way to empty the whole Starting XI in one tap —
+Coach's Help fills every slot, but there was no equally quick way to
+undo that (or just dump a manually-built XI) short of dragging each
+of the 11 players off the pitch one at a time.
+
+`TeamSelectionScreen.tsx` gained `handleClearTeam`, resetting `slots`
+to `buildEmptySlots(formation)` (the exact same helper the formation
+picker already uses when switching shapes) and clearing the
+tap-to-place selection. A new "Clear Team" button sits right next to
+Coach's Help, top-right of the pitch — same spot, same size, `danger`
+variant so it reads as the wipe-it-out action rather than another
+"add" button, and disabled whenever the XI is already empty (nothing
+to clear). No new pure logic to unit-test — it's a thin call into the
+already-tested `buildEmptySlots`.
+
+Verified live: filled the XI to 11/11 via Coach's Help, clicked Clear
+Team, confirmed every pitch slot read "empty" again and all 11
+players returned to the Substitutes/Squad lists, with the button
+itself immediately greying out once there was nothing left to clear.
+`tsc`, full suite (190 tests, unaffected), `eslint` clean.

@@ -224,6 +224,12 @@ export function TeamSelectionScreen({
     setSlots((prev) => fillEmptySlotsWithCoachPick(prev, squad, pseudoClub));
   }
 
+  /** Empties every slot in the CURRENT formation — the undo for Coach's Help (or just starting the XI over by hand) rather than having to drag each player off one at a time. */
+  function handleClearTeam() {
+    setSlots(buildEmptySlots(formation));
+    setSelectedPlayerId(null);
+  }
+
   const playersById = useMemo(() => new Map(squad.map((p) => [p.id, p])), [squad]);
 
   // A player already placed on the pitch can become injured between visits
@@ -425,6 +431,12 @@ export function TeamSelectionScreen({
     </Button>
   );
 
+  const clearTeamButton = (
+    <Button variant="danger" className="px-2 py-1 text-xs shadow-[1px_1px_0_rgba(0,0,0,0.4)]" onClick={handleClearTeam} disabled={filledCount === 0} title="Empty every slot and start over">
+      Clear Team
+    </Button>
+  );
+
   const continueButton = onContinue ? (
     <Button className="px-3 py-1 text-xs" style={{ backgroundColor: primaryColor, borderColor: secondaryColor, color: contrastText }} onClick={onContinue}>
       Continue
@@ -467,7 +479,10 @@ export function TeamSelectionScreen({
                 {/* Center circle — same shape either orientation */}
                 <div className="pointer-events-none absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/60" />
 
-                <div className="absolute right-1.5 top-1.5 z-10">{coachHelpButton}</div>
+                <div className="absolute right-1.5 top-1.5 z-10 flex gap-1.5">
+                  {clearTeamButton}
+                  {coachHelpButton}
+                </div>
 
                 <div className="relative flex h-full flex-col items-stretch justify-between gap-1 px-3 py-3 md:flex-row md:px-5">
                   {COLUMN_ORDER.map((position) => {
