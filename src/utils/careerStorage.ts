@@ -11,9 +11,20 @@ const STORAGE_KEY = 'fsm-career-v1';
  * Everything needed to resume a career exactly where it was left — one
  * save slot for the one career in progress, not per-club multi-save
  * (matches the app's single-playthrough flow: picking a different club
- * starts a new career, it doesn't stack alongside the old one).
+ * starts a new career, it doesn't stack alongside the old one). A
+ * sacking no longer forces an immediate new job — the player goes
+ * properly unemployed instead (see utils/careerTransition.ts), which
+ * has no managed club at all, hence the union: `status` discriminates
+ * between the two. Most code only ever needs `EmployedSaveData`
+ * directly (CareerScreen's own `initialSave`/`onTakeNewJob` are typed
+ * to it specifically); the union exists for the one shared save slot
+ * in localStorage and App.tsx's top-level routing.
  */
-export interface CareerSaveData {
+export type CareerSaveData = EmployedSaveData | UnemployedSaveData;
+
+export interface EmployedSaveData {
+  /** Absent on every save from before unemployment existed — treated as 'employed' (the only thing a save could be back then). */
+  status?: 'employed';
   clubId: string;
   leagueId: string;
   managerName: string;
@@ -38,15 +49,7 @@ export interface CareerSaveData {
   managerTenureStartMatchday?: number;
   /** The managed league's own managerial news feed, newest first. */
   managerNews?: ManagerNewsEvent[];
-  /**
-   * Set only while a sacking is awaiting the player's decision —
-   * resumable (reloading mid-decision shows the same offers, not a
-   * reroll). isExploratory means none of the offered clubs were
-   * genuinely vacant — a guaranteed fallback so the player is never left
-   * with zero options (see PLAN.md).
-   */
-  sackedState?: { offeredClubIds: string[]; isExploratory: boolean } | null;
-  /** Set only while an unsolicited approach from another club is awaiting the player's Accept/Decline — resumable, same as sackedState. */
+  /** Set only while an unsolicited approach from another club is awaiting the player's Accept/Decline — resumable (reloading mid-decision shows the same approach, not a reroll). */
   managerApproachState?: { clubId: string } | null;
   /** The matchday of the player's most recent approach (accepted, declined, or otherwise resolved) — drives MANAGER_APPROACH_COOLDOWN_MATCHDAYS. null/absent means "never approached yet." */
   managerLastApproachMatchday?: number | null;
@@ -64,10 +67,27 @@ export interface CareerSaveData {
   seasonSummaryDismissed: boolean;
 }
 
+/**
+ * The save shape for a genuinely unemployed spell — no managed club at
+ * all, just every league ticking along as its own BackgroundLeagueState
+ * (see utils/careerTransition.ts). `leagueClubIds` isn't stored
+ * separately since it's always just derivable from `leagues[].clubIds`.
+ */
+export interface UnemployedSaveData {
+  status: 'unemployed';
+  managerName: string;
+  seasonNumber: number;
+  leagues: BackgroundLeagueState[];
+  allSquads: Record<string, Player[]>;
+}
+
 /** Minimal shape check — enough to reject corrupted/foreign JSON without trusting it blindly. */
 function isCareerSaveData(value: unknown): value is CareerSaveData {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
+  if (v.status === 'unemployed') {
+    return typeof v.managerName === 'string' && Array.isArray(v.leagues) && typeof v.allSquads === 'object';
+  }
   return (
     typeof v.clubId === 'string' &&
     typeof v.leagueId === 'string' &&

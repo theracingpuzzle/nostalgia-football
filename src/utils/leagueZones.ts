@@ -48,6 +48,11 @@ export function zonesForTier(tier: LeagueDefinition['tier']): Exclude<LeagueZone
   return tier === 'top' ? ['champions', 'europa', 'relegation'] : ['promotion', 'playoff', 'relegation'];
 }
 
+/** Lower is more prestigious — top=1, second=2, third=3, fourth=4. La Liga shares `tier: 'top'` with the Premier League (rank 1 for both), not a separate rank, since they're two independent top-flight leagues, not stacked. Used for cross-league manager offers/approaches (see engine/managers.ts), where "a tier above/below" needs a simple numeric comparison. */
+export function tierRank(tier: LeagueDefinition['tier']): number {
+  return { top: 1, second: 2, third: 3, fourth: 4 }[tier];
+}
+
 export function ordinal(n: number): string {
   const rem100 = n % 100;
   if (rem100 >= 11 && rem100 <= 13) return `${n}th`;

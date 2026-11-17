@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getLeagueZone } from '../leagueZones';
-import { computePyramidTransition, ENGLISH_PYRAMID } from '../pyramid';
+import { applyPyramidTransitions, computePyramidTransition, ENGLISH_PYRAMID } from '../pyramid';
 import type { LeagueTableRow } from '../../engine/types';
 
 function row(clubId: string): LeagueTableRow {
@@ -110,54 +110,37 @@ describe('computePyramidTransition — League One <-> League Two (different shap
 
 /**
  * Regression test for the "a club ends up in two leagues at once" bug:
- * CareerScreen's startNewSeason() applies computePyramidTransition across
- * ENGLISH_PYRAMID's three adjacent boundaries in one pass, and Championship
- * and League One each sit in the MIDDLE of that chain — they're the
- * "lower" league for one boundary and the "upper" league for the next. If
- * each boundary is fed the original, season-start club lists instead of
- * the roster already updated by the previous boundary, the later boundary
- * clobbers the earlier one's promotions/relegations for the shared league,
- * leaving a club listed in two leagues' final rosters simultaneously (and,
- * since fixtures are generated per-league from that list, playing two
- * independent fixture schedules). This test runs the same three-boundary
- * chain CareerScreen runs, across a realistic shared club universe, and
- * asserts no club is ever double-counted and every league ends up the
- * right size.
+ * CareerScreen's startNewSeason() (and now the unemployed-spell season
+ * rollover too — see utils/careerTransition.ts) applies
+ * `applyPyramidTransitions` across ENGLISH_PYRAMID's three adjacent
+ * boundaries in one pass, and Championship and League One each sit in
+ * the MIDDLE of that chain — they're the "lower" league for one
+ * boundary and the "upper" league for the next. If each boundary were
+ * fed the original, season-start club lists instead of the roster
+ * already updated by the previous boundary, the later boundary would
+ * clobber the earlier one's promotions/relegations for the shared
+ * league, leaving a club listed in two leagues' final rosters
+ * simultaneously (and, since fixtures are generated per-league from
+ * that list, playing two independent fixture schedules). This test
+ * runs the REAL `applyPyramidTransitions` across a realistic shared
+ * club universe, and asserts no club is ever double-counted and every
+ * league ends up the right size.
  */
 describe('three-boundary pyramid chain (regression: no club should ever end up in two leagues)', () => {
-  const tierByLeagueId: Record<string, 'top' | 'second' | 'third' | 'fourth'> = {
-    'premier-league': 'top',
-    championship: 'second',
-    'league-one': 'third',
-    'league-two': 'fourth',
-  };
+  // applyPyramidTransitions resolves each league's tier itself from the
+  // real data/leagues.ts LEAGUES (premier-league/top, championship/second,
+  // league-one/third, league-two/fourth) — no need to pass tiers in here.
 
   function runFullChain(clubIdsByLeague: Record<string, string[]>, playoffWinnerByLowerLeague: Record<string, string>) {
     const tableByLeague: Record<string, LeagueTableRow[]> = Object.fromEntries(
       Object.entries(clubIdsByLeague).map(([leagueId, ids]) => [leagueId, ids.map(row)]),
     );
 
-    let nextLeagueClubIds: Record<string, string[]> = clubIdsByLeague;
-    for (let i = 0; i < ENGLISH_PYRAMID.length - 1; i++) {
-      const upperLeagueId = ENGLISH_PYRAMID[i];
-      const lowerLeagueId = ENGLISH_PYRAMID[i + 1];
-      const playoffWinnerClubId = playoffWinnerByLowerLeague[lowerLeagueId];
-      if (!playoffWinnerClubId) continue;
-
-      const currentUpperClubIds = nextLeagueClubIds[upperLeagueId] ?? clubIdsByLeague[upperLeagueId];
-      const currentLowerClubIds = nextLeagueClubIds[lowerLeagueId] ?? clubIdsByLeague[lowerLeagueId];
-      const { nextUpperClubIds, nextLowerClubIds } = computePyramidTransition(
-        currentUpperClubIds,
-        currentLowerClubIds,
-        tableByLeague[upperLeagueId],
-        tableByLeague[lowerLeagueId],
-        playoffWinnerClubId,
-        tierByLeagueId[upperLeagueId],
-        tierByLeagueId[lowerLeagueId],
-      );
-      nextLeagueClubIds = { ...nextLeagueClubIds, [upperLeagueId]: nextUpperClubIds, [lowerLeagueId]: nextLowerClubIds };
-    }
-    return nextLeagueClubIds;
+    return applyPyramidTransitions(clubIdsByLeague, (leagueId) => ({
+      clubIds: clubIdsByLeague[leagueId],
+      table: tableByLeague[leagueId],
+      playoffWinnerClubId: playoffWinnerByLowerLeague[leagueId],
+    }));
   }
 
   const clubIdsByLeague = {

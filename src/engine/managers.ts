@@ -1,5 +1,7 @@
 import { getInitialManagerName, PLACEHOLDER_MANAGER_POOL } from '../data/managers0809';
-import type { RandomFn } from './rng';
+import type { LeagueDefinition } from '../data/leagues';
+import { tierRank } from '../utils/leagueZones';
+import { weightedPick, type RandomFn } from './rng';
 import type { Fixture, LeagueTableRow } from './types';
 
 /**
@@ -193,38 +195,19 @@ export function vacantClubIds(managers: Record<string, ClubManagerState>, clubId
   return clubIds.filter((id) => managers[id]?.name === null);
 }
 
-/**
- * The offer list for a just-sacked player — up to `count` genuinely
- * vacant clubs in the same league (see PLAN.md — cross-league sacking is
- * out of scope), shuffled, excluding the club that just sacked them. If
- * NONE are vacant (the one edge case this game can't leave as a dead
- * end — see PLAN.md), falls back to exactly one random other employed
- * club, flagged isExploratory so the UI can say so rather than implying
- * a real vacancy. Always returns at least one offer.
- */
-export function pickSackedJobOffers(
-  managers: Record<string, ClubManagerState>,
-  clubIds: string[],
-  excludeClubId: string,
-  random: RandomFn,
-  count = 3,
-): { offeredClubIds: string[]; isExploratory: boolean } {
-  const candidates = vacantClubIds(managers, clubIds).filter((id) => id !== excludeClubId);
-  const pool = candidates.length > 0 ? candidates : clubIds.filter((id) => id !== excludeClubId);
-  const isExploratory = candidates.length === 0;
-
-  const shuffled = [...pool];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return { offeredClubIds: shuffled.slice(0, isExploratory ? 1 : count), isExploratory };
+/** A vacant club available to be approached, tagged with its own league's tier — see checkForJobApproach's weighting. */
+export interface JobApproachCandidate {
+  clubId: string;
+  tier: LeagueDefinition['tier'];
 }
 
 /**
- * Checks whether some other club in the same league makes an unsolicited
- * approach to the player this matchday — the one voluntary way to leave
- * a job without being sacked. Gated, in order, on: confidence healthy
+ * Checks whether some other club — in ANY league/tier, not just the
+ * player's own (being sacked no longer offers a shortlist at all; the
+ * player goes properly unemployed instead and browses every real
+ * vacancy themselves — see utils/careerTransition.ts) — makes an
+ * unsolicited approach this matchday, the one voluntary way to leave a
+ * job without being sacked. Gated, in order, on: confidence healthy
  * enough to be "doing well" (MANAGER_SECURE_THRESHOLD); the player's own
  * tenure past its grace period (even a high-confidence mid-season hire
  * shouldn't be poachable before settling in — same reasoning as the sack
@@ -233,19 +216,40 @@ export function pickSackedJobOffers(
  * roll. No RNG is spent unless every other gate already passes, so a
  * given seed always consumes the same number of random() calls
  * regardless of which gate (if any) stopped it.
+ *
+ * Which specific club approaches is a WEIGHTED pick (via engine/rng.ts
+ * weightedPick), not uniform, once gated through: a same-tier candidate
+ * gets a flat baseline weight (matches the old same-league-only
+ * behavior when nothing cross-league happens to be available); a LESS
+ * prestigious tier always gets a flat, lower weight (a smaller club
+ * still wants a proven manager, whatever the form); a MORE prestigious
+ * tier starts at weight 0 right at MANAGER_SECURE_THRESHOLD and rises
+ * toward the same weight as same-tier as `jobSecurity` approaches 100 —
+ * so a step up the pyramid stays rare unless the player is doing very
+ * well, not just "well enough to be approached at all."
  */
 export function checkForJobApproach(
   jobSecurity: number,
   matchday: number,
   tenureStartMatchday: number,
   lastApproachMatchday: number | null,
-  vacantCandidateClubIds: string[],
+  currentTier: LeagueDefinition['tier'],
+  vacantCandidates: JobApproachCandidate[],
   random: RandomFn,
 ): string | null {
   if (jobSecurity < MANAGER_SECURE_THRESHOLD) return null;
   if (matchday - tenureStartMatchday < MANAGER_SACK_GRACE_MATCHDAYS) return null;
   if (lastApproachMatchday !== null && matchday - lastApproachMatchday < MANAGER_APPROACH_COOLDOWN_MATCHDAYS) return null;
-  if (vacantCandidateClubIds.length === 0) return null;
+  if (vacantCandidates.length === 0) return null;
   if (random() >= MANAGER_APPROACH_CHANCE) return null;
-  return vacantCandidateClubIds[Math.floor(random() * vacantCandidateClubIds.length)];
+
+  const currentRank = tierRank(currentTier);
+  const promotionWeight = (Math.max(0, Math.min(100, jobSecurity - MANAGER_SECURE_THRESHOLD)) / (100 - MANAGER_SECURE_THRESHOLD)) * 3;
+  const candidate = weightedPick(random, vacantCandidates, (c) => {
+    const rank = tierRank(c.tier);
+    if (rank === currentRank) return 3;
+    if (rank > currentRank) return 1; // less prestigious
+    return promotionWeight; // more prestigious
+  });
+  return candidate.clubId;
 }

@@ -21,7 +21,6 @@ import {
   getAggregateOffsetForFixture,
   isSackWorthy,
   managedClubStillInPlayoff,
-  pickSackedJobOffers,
   playoffSeedStartForTier,
   recentFormScore,
   resolveManagedDecisiveFixture,
@@ -30,6 +29,7 @@ import {
   vacantClubIds,
   MANAGER_STARTING_CONFIDENCE,
   type ClubManagerState,
+  type JobApproachCandidate,
   type ManagerNewsEvent,
   type PlayoffState,
 } from '../engine';
@@ -42,13 +42,13 @@ import {
   isBackgroundLeagueSeasonComplete,
   type BackgroundLeagueState,
 } from '../utils/backgroundLeague';
+import { managedLeagueToBackgroundState, takeOverClub } from '../utils/careerTransition';
 import { getLeagueZone } from '../utils/leagueZones';
-import { computePyramidTransition, ENGLISH_PYRAMID } from '../utils/pyramid';
+import { applyPyramidTransitions, ENGLISH_PYRAMID } from '../utils/pyramid';
 import { FixturesScreen } from './FixturesScreen';
 import { LeagueTableScreen } from './LeagueTableScreen';
 import { MatchAnimationScreen } from './MatchAnimationScreen';
 import { ManagerApproachScreen } from './ManagerApproachScreen';
-import { ManagerSackedScreen } from './ManagerSackedScreen';
 import { ManagersScreen } from './ManagersScreen';
 import { MatchResultScreen } from './MatchResultScreen';
 import { OtherLeaguesScreen } from './OtherLeaguesScreen';
@@ -64,7 +64,7 @@ import {
   type TransferOffer,
   type TransferTimelineEntry,
 } from './TransferWindowScreen';
-import { saveCareer, type CareerSaveData } from '../utils/careerStorage';
+import { saveCareer, type EmployedSaveData, type UnemployedSaveData } from '../utils/careerStorage';
 
 const AI_FORMATION = FORMATIONS.find((f) => f.id === DEFAULT_FORMATION_ID) ?? FORMATIONS[0];
 
@@ -366,16 +366,19 @@ export function CareerScreen({
   managerName,
   onChangeClub,
   onTakeNewJob,
+  onBecomeUnemployed,
   initialSave,
 }: {
   club: ClubListing;
   squad: Player[];
   managerName: string;
   onChangeClub: () => void;
-  /** Accepting a job offer after being sacked — reuses the same remount-via-key mechanism as onChangeClub, just saving first instead of clearing (see PLAN.md). */
-  onTakeNewJob: (newClubId: string, nextSave: CareerSaveData) => void;
+  /** Accepting a cross-league approach — reuses the same remount-via-key mechanism as onChangeClub, just saving first instead of clearing (see PLAN.md). Also reused by UnemployedScreen's own Apply action, via the same App.tsx handler. */
+  onTakeNewJob: (newClubId: string, nextSave: EmployedSaveData) => void;
+  /** Being sacked no longer picks a new job immediately — it hands off to a genuinely unemployed spell instead (see utils/careerTransition.ts/UnemployedScreen.tsx), which has no managed club at all, hence the separate save shape and callback. */
+  onBecomeUnemployed: (save: UnemployedSaveData) => void;
   /** A previously-saved career for this same club, to resume from instead of starting fresh. Ignored (treated as absent) if it belongs to a different club. */
-  initialSave?: CareerSaveData;
+  initialSave?: EmployedSaveData;
 }) {
   const resume = initialSave && initialSave.clubId === club.id ? initialSave : undefined;
 
@@ -478,11 +481,6 @@ export function CareerScreen({
   const [managerTenureStartMatchday, setManagerTenureStartMatchday] = useState<number>(resume?.managerTenureStartMatchday ?? 1);
   // The managed league's own managerial news feed, newest first.
   const [managerNews, setManagerNews] = useState<ManagerNewsEvent[]>(resume?.managerNews ?? []);
-  // Set only while a sacking is awaiting the player's decision — the
-  // overlay this drives pre-empts everything else (see the overlay chain
-  // below), so there's deliberately no way to advance a matchday while
-  // this is non-null.
-  const [sackedState, setSackedState] = useState<{ offeredClubIds: string[]; isExploratory: boolean } | null>(resume?.sackedState ?? null);
   // Set only while an unsolicited approach from another club (the one
   // voluntary way to leave a job — see engine/managers.ts
   // checkForJobApproach) is awaiting Accept/Decline.
@@ -539,7 +537,6 @@ export function CareerScreen({
       managerJobSecurity,
       managerTenureStartMatchday,
       managerNews,
-      sackedState,
       managerApproachState,
       managerLastApproachMatchday,
       managerName,
@@ -567,7 +564,6 @@ export function CareerScreen({
     managerJobSecurity,
     managerTenureStartMatchday,
     managerNews,
-    sackedState,
     managerApproachState,
     managerLastApproachMatchday,
     managerName,
@@ -708,8 +704,17 @@ export function CareerScreen({
     setTransferOffers((prev) => prev.map((o) => (o.id === offerId ? { ...o, status: 'declined' } : o)));
   }
 
-  /** Advances every OTHER league by exactly one matchday too — this is what "the leagues run alongside one another" actually is. Combines every league's squad writes into the one returned map so the caller issues a single setAllSquads, not one per league. */
-  function advanceBackgroundLeaguesOnce(squadsBase: Record<string, Player[]>): Record<string, Player[]> {
+  /**
+   * Advances every OTHER league by exactly one matchday too — this is
+   * what "the leagues run alongside one another" actually is. Combines
+   * every league's squad writes into the one returned map so the
+   * caller issues a single setAllSquads, not one per league. Returns
+   * the freshly-advanced leagues as a plain value too (not just via
+   * setBackgroundLeagues) — a same-tick sacking needs them immediately
+   * for the unemployed handoff, before the setState above has actually
+   * re-rendered this closure's own `backgroundLeagues`.
+   */
+  function advanceBackgroundLeaguesOnce(squadsBase: Record<string, Player[]>): { allSquads: Record<string, Player[]>; backgroundLeagues: BackgroundLeagueState[] } {
     let squadsAcc = squadsBase;
     const nextBackgroundLeagues = backgroundLeagues.map((bg) => {
       const { nextState, updatedAllSquads } = advanceBackgroundLeagueMatchday(bg, squadsAcc);
@@ -717,7 +722,7 @@ export function CareerScreen({
       return nextState;
     });
     setBackgroundLeagues(nextBackgroundLeagues);
-    return squadsAcc;
+    return { allSquads: squadsAcc, backgroundLeagues: nextBackgroundLeagues };
   }
 
   /**
@@ -727,82 +732,159 @@ export function CareerScreen({
    * applyInjuryUpdates already uses. Updates every OTHER club's manager
    * (see engine/managers.ts) — including filling any standing vacancy
    * that's been open long enough — then the player's own job security.
-   * If that crosses the sacking threshold, the just-vacated club becomes
-   * genuinely vacant (no instant replacement — same as any other
-   * sacking now) and a short list of REAL same-league vacancies is
-   * queued as offers. Otherwise, checks whether the player's own good
-   * form has attracted an unsolicited approach from one of those same
-   * vacancies. Either overlay (see the render below) is what actually
-   * stops the player from doing anything else until they respond.
+   * If that crosses the sacking threshold, `sacked: true` tells the
+   * caller to hand off to a genuinely unemployed spell instead of
+   * continuing here (see utils/careerTransition.ts). Otherwise, checks
+   * whether the player's own good form has attracted an unsolicited
+   * approach from a vacancy ANYWHERE — not just this league, weighted
+   * toward tiers matching how well they're doing (see
+   * `currentBackgroundLeagues` below and engine/managers.ts
+   * checkForJobApproach).
+   *
+   * Returns a result rather than calling setState itself: both call
+   * sites already have the freshest `allSquads`/`backgroundLeagues` as
+   * plain local values at the point they call this (computed earlier
+   * in the same synchronous handler, before any setState from this
+   * matchday has actually re-rendered), which a sacking needs for a
+   * fully consistent unemployed-handoff snapshot — reading this
+   * component's own (possibly stale) closed-over state instead would
+   * risk handing off a snapshot missing this same matchday's own
+   * background-league results. `currentBackgroundLeagues` is passed in
+   * for the same reason, used only to build the cross-league approach
+   * candidate list.
    */
-  function applyManagerUpdatesForMatchday(matchday: number, fixturesAfter: Fixture[], random: () => number) {
+  function applyManagerUpdatesForMatchday(
+    matchday: number,
+    fixturesAfter: Fixture[],
+    currentBackgroundLeagues: BackgroundLeagueState[],
+    random: () => number,
+  ): { nextManagers: Record<string, ClubManagerState>; managerNewsAppend: ManagerNewsEvent[]; nextConfidence: number; sacked: boolean; approachingClubId: string | null } {
     const tableAfter = computeLeagueTable(ALL_CLUB_IDS, fixturesAfter);
     const otherClubIds = ALL_CLUB_IDS.filter((id) => id !== club.id);
     const { nextManagers, sackings } = updateLeagueManagers(leagueManagers, otherClubIds, tableAfter, fixturesAfter, matchday);
     const { nextManagers: filledManagers, appointments } = fillStaleVacancies(nextManagers, otherClubIds, matchday, random);
-    setLeagueManagers(filledManagers);
-
-    const newsThisMatchday = [...sackings, ...appointments];
-    if (newsThisMatchday.length > 0) setManagerNews((prev) => [...newsThisMatchday, ...prev]);
+    const managerNewsAppend = [...sackings, ...appointments];
 
     const playerPosition = tableAfter.findIndex((r) => r.clubId === club.id) + 1;
     const playerForm = recentFormScore(club.id, fixturesAfter);
     const nextConfidence = computeNextConfidence(managerJobSecurity, playerPosition, ALL_CLUB_IDS.length, playerForm);
-    setManagerJobSecurity(nextConfidence);
 
     if (isSackWorthy(nextConfidence, matchday, managerTenureStartMatchday)) {
-      setLeagueManagers({ ...filledManagers, [club.id]: { name: null, confidence: nextConfidence, tenureStartMatchday: matchday } });
-      setSackedState(pickSackedJobOffers(filledManagers, otherClubIds, club.id, random));
-      return;
+      return { nextManagers: filledManagers, managerNewsAppend, nextConfidence, sacked: true, approachingClubId: null };
     }
 
+    const crossLeagueCandidates: JobApproachCandidate[] = [
+      ...vacantClubIds(filledManagers, otherClubIds).map((clubId) => ({ clubId, tier: league.tier })),
+      ...currentBackgroundLeagues.flatMap((bg) =>
+        vacantClubIds(bg.managers, bg.clubIds).map((clubId) => ({ clubId, tier: LEAGUES.find((l) => l.id === bg.leagueId)!.tier })),
+      ),
+    ];
     const approachingClubId = checkForJobApproach(
       nextConfidence,
       matchday,
       managerTenureStartMatchday,
       managerLastApproachMatchday,
-      vacantClubIds(filledManagers, otherClubIds),
+      league.tier,
+      crossLeagueCandidates,
       random,
     );
-    if (approachingClubId) {
-      setManagerApproachState({ clubId: approachingClubId });
+    return { nextManagers: filledManagers, managerNewsAppend, nextConfidence, sacked: false, approachingClubId };
+  }
+
+  /** Commits a non-sacking `applyManagerUpdatesForMatchday` result — pulled out since both call sites need the exact same three setState calls. */
+  function commitManagerUpdates(matchday: number, result: ReturnType<typeof applyManagerUpdatesForMatchday>) {
+    setLeagueManagers(result.nextManagers);
+    if (result.managerNewsAppend.length > 0) setManagerNews((prev) => [...result.managerNewsAppend, ...prev]);
+    setManagerJobSecurity(result.nextConfidence);
+    if (result.approachingClubId) {
+      setManagerApproachState({ clubId: result.approachingClubId });
       setManagerLastApproachMatchday(matchday);
     }
   }
 
+  /** Builds the UnemployedSaveData handoff for a just-fired sacking — shared by both call sites of applyManagerUpdatesForMatchday. */
+  function buildUnemployedSaveOnSacking(
+    matchday: number,
+    fixturesAfter: Fixture[],
+    seedAtSacking: number,
+    currentBackgroundLeagues: BackgroundLeagueState[],
+    currentAllSquads: Record<string, Player[]>,
+    result: ReturnType<typeof applyManagerUpdatesForMatchday>,
+  ): UnemployedSaveData {
+    const formerManagedLeagueBg = managedLeagueToBackgroundState({
+      leagueId: managedLeagueId,
+      clubIds: ALL_CLUB_IDS,
+      fixtures: fixturesAfter,
+      nextSeed: seedAtSacking,
+      playoff: managedPlayoff,
+      leagueManagers: result.nextManagers,
+      managerNews: [...result.managerNewsAppend, ...managerNews],
+      playerClubId: club.id,
+      playerConfidence: result.nextConfidence,
+      vacantSinceMatchday: matchday,
+    });
+    return {
+      status: 'unemployed',
+      managerName,
+      seasonNumber,
+      leagues: [...currentBackgroundLeagues, formerManagedLeagueBg],
+      allSquads: currentAllSquads,
+    };
+  }
+
   /**
-   * Shared by both the sacked flow (forced) and the approach flow
-   * (voluntary) — reuses the EXISTING remount-via-key={club.id}
-   * mechanism App.tsx already has for "Change Club," just saving the
-   * carried-over state first instead of clearing it. The old club
-   * becomes genuinely vacant, same as any other sacking.
+   * Accepting a voluntary cross-league approach (the only way
+   * `handleTakeNewJob` is reachable now — a sacking goes to
+   * `onBecomeUnemployed` instead, see above) — reuses the EXISTING
+   * remount-via-key={club.id} mechanism App.tsx already has for
+   * "Change Club," just saving the carried-over state first instead of
+   * clearing it. The league just left becomes an ordinary background
+   * league with the old club genuinely vacant (via
+   * managedLeagueToBackgroundState), same as any other sacking; the
+   * NEW club's own league is pulled out of backgroundLeagues (it may
+   * be a DIFFERENT league than the one just left) via takeOverClub, so
+   * everything about the new job — fixtures, managers, news, playoff,
+   * seed — comes from THAT league's own current state, not reused from
+   * the old one.
    */
   function handleTakeNewJob(newClubId: string) {
     const lastPlayedMatchday = Math.max(0, ...fixtures.filter((f) => f.played).map((f) => f.matchday));
-    const nextLeagueManagers = { ...leagueManagers };
-    delete nextLeagueManagers[newClubId];
-    nextLeagueManagers[club.id] = { name: null, confidence: MANAGER_STARTING_CONFIDENCE, tenureStartMatchday: lastPlayedMatchday };
+    const formerManagedLeagueBg = managedLeagueToBackgroundState({
+      leagueId: managedLeagueId,
+      clubIds: ALL_CLUB_IDS,
+      fixtures,
+      nextSeed,
+      playoff: managedPlayoff,
+      leagueManagers,
+      managerNews,
+      playerClubId: club.id,
+      playerConfidence: MANAGER_STARTING_CONFIDENCE,
+      vacantSinceMatchday: lastPlayedMatchday,
+    });
+    const { newClubLeague, remainingLeagues } = takeOverClub(newClubId, [...backgroundLeagues, formerManagedLeagueBg]);
+    const newLeagueManagers = { ...newClubLeague.managers };
+    delete newLeagueManagers[newClubId];
+    const newClubLastPlayedMatchday = Math.max(0, ...newClubLeague.fixtures.filter((f) => f.played).map((f) => f.matchday));
 
     onTakeNewJob(newClubId, {
       clubId: newClubId,
-      leagueId: league.id,
+      leagueId: newClubLeague.leagueId,
       seasonNumber,
       managerName,
-      leagueClubIds,
-      backgroundLeagues,
-      managedPlayoff,
-      leagueManagers: nextLeagueManagers,
+      leagueClubIds: { ...leagueClubIds, [managedLeagueId]: ALL_CLUB_IDS, [newClubLeague.leagueId]: newClubLeague.clubIds },
+      backgroundLeagues: remainingLeagues,
+      managedPlayoff: newClubLeague.playoff,
+      leagueManagers: newLeagueManagers,
       managerJobSecurity: MANAGER_STARTING_CONFIDENCE,
-      managerTenureStartMatchday: lastPlayedMatchday,
-      managerNews,
-      sackedState: null,
+      managerTenureStartMatchday: newClubLastPlayedMatchday,
+      managerNews: newClubLeague.managerNews,
       managerApproachState: null,
       managerLastApproachMatchday,
       screen: 'team',
       formationId: DEFAULT_FORMATION_ID,
       selectedXI: [],
-      fixtures,
-      nextSeed,
+      fixtures: newClubLeague.fixtures,
+      nextSeed: newClubLeague.nextSeed,
       lastPlayedFixtureId: null,
       allSquads,
       transferWindow,
@@ -859,7 +941,7 @@ export function CareerScreen({
       });
       setLastPlayedFixtureId(deferred.fixtureId);
       setShowingAnimation(true);
-      setAllSquads(advanceBackgroundLeaguesOnce(allSquads));
+      setAllSquads(advanceBackgroundLeaguesOnce(allSquads).allSquads);
       // nextSeed, injuries, and XI-fitness all finish once the live match
       // reports its result back — see handleManagedMatchFinished.
       return;
@@ -870,7 +952,8 @@ export function CareerScreen({
     const injuryRandom = createRandom(seedAfterOtherFixtures);
     let seed = seedAfterOtherFixtures + 1;
     const updatedAllSquads = applyInjuryUpdates(allSquads, matchday, playedPlayerIdsByClub, injuryRandom);
-    setAllSquads(advanceBackgroundLeaguesOnce(updatedAllSquads));
+    const { allSquads: squadsAfterBg, backgroundLeagues: nextBackgroundLeagues } = advanceBackgroundLeaguesOnce(updatedAllSquads);
+    setAllSquads(squadsAfterBg);
     const stillFitIds = new Set((updatedAllSquads[club.id] ?? []).filter((p) => !p.injured).map((p) => p.id));
     setSelectedXI((prev) => prev.filter((id) => stillFitIds.has(id)));
 
@@ -880,7 +963,12 @@ export function CareerScreen({
     });
     const managerRandom = createRandom(seed);
     seed += 1;
-    applyManagerUpdatesForMatchday(matchday, fixturesAfter, managerRandom);
+    const managerResult = applyManagerUpdatesForMatchday(matchday, fixturesAfter, nextBackgroundLeagues, managerRandom);
+    if (managerResult.sacked) {
+      onBecomeUnemployed(buildUnemployedSaveOnSacking(matchday, fixturesAfter, seed, nextBackgroundLeagues, squadsAfterBg, managerResult));
+      return;
+    }
+    commitManagerUpdates(matchday, managerResult);
 
     setNextSeed(seed);
   }
@@ -939,7 +1027,13 @@ export function CareerScreen({
 
     const managerRandom = createRandom(seed);
     seed += 1;
-    applyManagerUpdatesForMatchday(liveMatch.matchday, fixturesAfter, managerRandom);
+    const managerResult = applyManagerUpdatesForMatchday(liveMatch.matchday, fixturesAfter, backgroundLeagues, managerRandom);
+    if (managerResult.sacked) {
+      onBecomeUnemployed(buildUnemployedSaveOnSacking(liveMatch.matchday, fixturesAfter, seed, backgroundLeagues, updatedAllSquads, managerResult));
+      setLiveMatch(null);
+      return;
+    }
+    commitManagerUpdates(liveMatch.matchday, managerResult);
 
     setNextSeed(seed);
     setLiveMatch(null);
@@ -1013,39 +1107,7 @@ export function CareerScreen({
       return { clubIds: bg.clubIds, table: computeLeagueTable(bg.clubIds, bg.fixtures), playoffWinnerClubId: bg.playoff?.championClubId ?? undefined };
     }
 
-    let nextLeagueClubIds = leagueClubIds;
-    for (let i = 0; i < ENGLISH_PYRAMID.length - 1; i++) {
-      const upperLeagueId = ENGLISH_PYRAMID[i];
-      const lowerLeagueId = ENGLISH_PYRAMID[i + 1];
-      const upperTier = LEAGUES.find((l) => l.id === upperLeagueId)!.tier;
-      const lowerTier = LEAGUES.find((l) => l.id === lowerLeagueId)!.tier;
-      const upper = outcomeFor(upperLeagueId);
-      const lower = outcomeFor(lowerLeagueId);
-      if (lower.playoffWinnerClubId) {
-        // Use each league's roster as already updated by an earlier boundary
-        // in this same loop (e.g. league-one's roster after the
-        // championship<->league-one boundary already removed/added clubs
-        // from the championship<->premier-league boundary above it) rather
-        // than outcomeFor's frozen season-start clubIds — otherwise this
-        // iteration's write clobbers the previous one's promotions/
-        // relegations for the league shared between both boundaries,
-        // leaving a club listed in two leagues at once. The *table* values
-        // stay from outcomeFor regardless: final standings aren't affected
-        // by other boundaries, only club-list membership is.
-        const currentUpperClubIds = nextLeagueClubIds[upperLeagueId] ?? upper.clubIds;
-        const currentLowerClubIds = nextLeagueClubIds[lowerLeagueId] ?? lower.clubIds;
-        const { nextUpperClubIds, nextLowerClubIds } = computePyramidTransition(
-          currentUpperClubIds,
-          currentLowerClubIds,
-          upper.table,
-          lower.table,
-          lower.playoffWinnerClubId,
-          upperTier,
-          lowerTier,
-        );
-        nextLeagueClubIds = { ...nextLeagueClubIds, [upperLeagueId]: nextUpperClubIds, [lowerLeagueId]: nextLowerClubIds };
-      }
-    }
+    const nextLeagueClubIds = applyPyramidTransitions(leagueClubIds, outcomeFor);
 
     const nextManagedLeagueId = Object.entries(nextLeagueClubIds).find(([, ids]) => ids.includes(club.id))?.[0] ?? managedLeagueId;
     const nextManagedClubIds = nextLeagueClubIds[nextManagedLeagueId] ?? ALL_CLUB_IDS;
@@ -1072,8 +1134,7 @@ export function CareerScreen({
     setManagerJobSecurity(MANAGER_STARTING_CONFIDENCE);
     setManagerTenureStartMatchday(1);
     setManagerNews([]);
-    setSackedState(null); // defensive — the overlay this drives already blocks reaching a new season with one pending
-    setManagerApproachState(null); // same defensive reasoning
+    setManagerApproachState(null); // defensive — the overlay this drives already blocks reaching a new season with one pending
     setManagerLastApproachMatchday(null);
     openTransferWindow('preseason', nextManagedClubIds, squadsAcc);
   }
@@ -1129,32 +1190,19 @@ export function CareerScreen({
         />
       );
     }
-  } else if (sackedState) {
-    const offeredClubs = sackedState.offeredClubIds
-      .map((id) => {
-        const offeredClub = ALL_CLUBS.find((c) => c.id === id);
-        const position = table.findIndex((r) => r.clubId === id) + 1;
-        return offeredClub ? { club: offeredClub, position } : null;
-      })
-      .filter((x): x is { club: ClubListing; position: number } => x !== null);
-    overlay = (
-      <ManagerSackedScreen
-        oldClub={club}
-        managerName={managerName}
-        leagueName={league.name}
-        offeredClubs={offeredClubs}
-        isExploratory={sackedState.isExploratory}
-        onTakeJob={handleTakeNewJob}
-      />
-    );
   } else if (managerApproachState) {
     const approachingClub = ALL_CLUBS.find((c) => c.id === managerApproachState.clubId);
+    // The approaching club's own CURRENT league — not the static
+    // getLeagueForClub lookup, which would be wrong for a club
+    // promotion/relegation has since moved into a different league.
+    const approachingLeagueId = backgroundLeagues.find((bg) => bg.clubIds.includes(managerApproachState.clubId))?.leagueId ?? managedLeagueId;
+    const approachingLeagueName = LEAGUES.find((l) => l.id === approachingLeagueId)?.name ?? league.name;
     overlay = approachingClub ? (
       <ManagerApproachScreen
         approachingClub={approachingClub}
         currentClub={club}
         managerName={managerName}
-        leagueName={league.name}
+        leagueName={approachingLeagueName}
         onAccept={() => handleTakeNewJob(managerApproachState.clubId)}
         onDecline={() => setManagerApproachState(null)}
       />

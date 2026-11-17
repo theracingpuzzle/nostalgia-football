@@ -14,11 +14,11 @@ import {
   fillStaleVacancies,
   isSackWorthy,
   pickReplacementManagerName,
-  pickSackedJobOffers,
   recentFormScore,
   updateLeagueManagers,
   vacantClubIds,
   type ClubManagerState,
+  type JobApproachCandidate,
 } from '../managers';
 import type { Fixture, LeagueTableRow, MatchResult } from '../types';
 
@@ -260,57 +260,24 @@ describe('pickReplacementManagerName', () => {
   });
 });
 
-describe('pickSackedJobOffers', () => {
-  const leagueClubIds = ['a', 'b', 'c', 'd', 'e', 'f'];
-
-  function managersWithVacant(vacantIds: string[]): Record<string, ClubManagerState> {
-    return Object.fromEntries(leagueClubIds.map((id) => [id, vacantIds.includes(id) ? { name: null, confidence: 0, tenureStartMatchday: 1 } : { name: `Manager-${id}`, confidence: 55, tenureStartMatchday: 1 }]));
-  }
-
-  it('only offers genuinely vacant clubs when any exist, and never includes excludeClubId', () => {
-    const managers = managersWithVacant(['c', 'd', 'e']);
-    const { offeredClubIds, isExploratory } = pickSackedJobOffers(managers, leagueClubIds, 'a', createRandom(1));
-    expect(isExploratory).toBe(false);
-    expect(offeredClubIds).not.toContain('a');
-    for (const id of offeredClubIds) expect(['c', 'd', 'e']).toContain(id);
-  });
-
-  it('falls back to exactly one exploratory offer when nothing is vacant', () => {
-    const managers = managersWithVacant([]);
-    const { offeredClubIds, isExploratory } = pickSackedJobOffers(managers, leagueClubIds, 'a', createRandom(1));
-    expect(isExploratory).toBe(true);
-    expect(offeredClubIds).toHaveLength(1);
-    expect(offeredClubIds[0]).not.toBe('a');
-  });
-
-  it('never returns an empty offer list, even with only two clubs in the league', () => {
-    const managers: Record<string, ClubManagerState> = {
-      a: { name: 'Manager-a', confidence: 55, tenureStartMatchday: 1 },
-      b: { name: 'Manager-b', confidence: 55, tenureStartMatchday: 1 },
-    };
-    const { offeredClubIds } = pickSackedJobOffers(managers, ['a', 'b'], 'a', createRandom(1));
-    expect(offeredClubIds.length).toBeGreaterThan(0);
-  });
-});
-
 describe('checkForJobApproach', () => {
-  const vacant = ['x'];
+  const vacant: JobApproachCandidate[] = [{ clubId: 'x', tier: 'top' }];
 
   it('is null below the secure threshold', () => {
-    expect(checkForJobApproach(MANAGER_SECURE_THRESHOLD - 1, 20, 1, null, vacant, createRandom(1))).toBeNull();
+    expect(checkForJobApproach(MANAGER_SECURE_THRESHOLD - 1, 20, 1, null, 'top', vacant, createRandom(1))).toBeNull();
   });
 
   it('is null with no vacant candidates', () => {
-    expect(checkForJobApproach(100, 20, 1, null, [], createRandom(1))).toBeNull();
+    expect(checkForJobApproach(100, 20, 1, null, 'top', [], createRandom(1))).toBeNull();
   });
 
   it('is null inside the player\'s own tenure grace period', () => {
-    expect(checkForJobApproach(100, 3, 1, null, vacant, createRandom(1))).toBeNull();
+    expect(checkForJobApproach(100, 3, 1, null, 'top', vacant, createRandom(1))).toBeNull();
   });
 
   it('is null inside the post-decline cooldown', () => {
     const matchday = 20;
-    expect(checkForJobApproach(100, matchday, 1, matchday - MANAGER_APPROACH_COOLDOWN_MATCHDAYS + 1, vacant, createRandom(1))).toBeNull();
+    expect(checkForJobApproach(100, matchday, 1, matchday - MANAGER_APPROACH_COOLDOWN_MATCHDAYS + 1, 'top', vacant, createRandom(1))).toBeNull();
   });
 
   it('is allowed again once the cooldown has fully elapsed', () => {
@@ -318,7 +285,7 @@ describe('checkForJobApproach', () => {
     // Run many seeds — some will roll above MANAGER_APPROACH_CHANCE and return null, but none should be blocked by the cooldown itself.
     let everFired = false;
     for (let seed = 1; seed < 200; seed++) {
-      const result = checkForJobApproach(100, matchday, 1, matchday - MANAGER_APPROACH_COOLDOWN_MATCHDAYS, vacant, createRandom(seed));
+      const result = checkForJobApproach(100, matchday, 1, matchday - MANAGER_APPROACH_COOLDOWN_MATCHDAYS, 'top', vacant, createRandom(seed));
       if (result !== null) everFired = true;
     }
     expect(everFired).toBe(true);
@@ -328,8 +295,42 @@ describe('checkForJobApproach', () => {
     const random = createRandom(123);
     let fired: string | null = null;
     for (let matchday = 10; matchday <= 200 && fired === null; matchday++) {
-      fired = checkForJobApproach(100, matchday, 1, null, vacant, random);
+      fired = checkForJobApproach(100, matchday, 1, null, 'top', vacant, random);
     }
     expect(fired).toBe('x');
+  });
+
+  it('can pick a candidate from ANY tier, not just the current one', () => {
+    const crossTier: JobApproachCandidate[] = [{ clubId: 'lower-tier-club', tier: 'second' }];
+    const random = createRandom(7);
+    let fired: string | null = null;
+    for (let matchday = 10; matchday <= 400 && fired === null; matchday++) {
+      fired = checkForJobApproach(100, matchday, 1, null, 'top', crossTier, random);
+    }
+    expect(fired).toBe('lower-tier-club');
+  });
+
+  it('weights a step UP the pyramid toward being chosen more often the better jobSecurity is above the secure threshold', () => {
+    const candidates: JobApproachCandidate[] = [
+      { clubId: 'same-tier', tier: 'second' },
+      { clubId: 'tier-above', tier: 'top' },
+    ];
+
+    function countPromotions(jobSecurity: number): number {
+      let count = 0;
+      for (let seed = 1; seed <= 500; seed++) {
+        // Force the "does an approach fire at all" roll to always pass by
+        // using a vacant candidate list on every matchday and a grace
+        // period/cooldown that are already satisfied — only the WEIGHTED
+        // pick itself (the second random() call) is being measured here.
+        const result = checkForJobApproach(jobSecurity, 100, 1, null, 'second', candidates, createRandom(seed));
+        if (result === 'tier-above') count++;
+      }
+      return count;
+    }
+
+    const barelySecure = countPromotions(MANAGER_SECURE_THRESHOLD);
+    const verySecure = countPromotions(100);
+    expect(verySecure).toBeGreaterThan(barelySecure);
   });
 });

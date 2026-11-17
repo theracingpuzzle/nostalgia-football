@@ -10,10 +10,11 @@ import { ClubOverviewScreen } from './ClubOverviewScreen';
 /**
  * Every club in a league, its current manager (or "Vacant"), and that
  * manager's job security — a read-only overview, not an action point.
- * Applying for a job only ever happens as a reaction to being sacked
- * (ManagerSackedScreen); being approached only ever happens as an
- * unsolicited overlay (ManagerApproachScreen) — neither is triggered
- * from here. Same row/crest/click-to-drill-down shape as
+ * Applying for a real vacancy only ever happens from the Unemployed
+ * screen (see UnemployedScreen.tsx/utils/careerTransition.ts); being
+ * approached only ever happens as an unsolicited overlay
+ * (ManagerApproachScreen) — neither is triggered from here. Same
+ * row/crest/click-to-drill-down shape as
  * LeagueTableScreen, reused for both the managed league (a new
  * CareerNav tab) and each background league (OtherLeaguesScreen's
  * Table/Managers toggle).

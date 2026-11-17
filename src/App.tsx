@@ -5,11 +5,12 @@ import { CareerScreen } from './screens/CareerScreen';
 import { LeagueSelectScreen } from './screens/LeagueSelectScreen';
 import { ManagerNameScreen } from './screens/ManagerNameScreen';
 import { TitleScreen } from './screens/TitleScreen';
+import { UnemployedScreen } from './screens/UnemployedScreen';
 import { SQUADS_BY_CLUB_ID } from './data/clubSquads';
 import { ALL_CLUBS, LEAGUES, getLeagueForClub } from './data/leagues';
-import { clearCareer, loadCareer, saveCareer, type CareerSaveData } from './utils/careerStorage';
+import { clearCareer, loadCareer, saveCareer, type CareerSaveData, type EmployedSaveData, type UnemployedSaveData } from './utils/careerStorage';
 
-type Stage = 'title' | 'managerName' | 'leagueSelect' | { kind: 'clubSelect'; leagueId: string } | { kind: 'career'; clubId: string };
+type Stage = 'title' | 'managerName' | 'leagueSelect' | { kind: 'clubSelect'; leagueId: string } | { kind: 'career'; clubId: string } | 'unemployed';
 
 function App() {
   // Read once at startup — this app only ever writes this key from its own
@@ -18,9 +19,19 @@ function App() {
   const [stage, setStage] = useState<Stage>('title');
   const [managerName, setManagerName] = useState('');
 
+  // Reused by both ClubRoute's approach-accept and UnemployedScreen's own
+  // Apply action — in both cases it's "save + jump to that club's career,"
+  // nothing about the handler itself differs.
+  function handleTakeNewJob(newClubId: string, nextSave: EmployedSaveData) {
+    saveCareer(nextSave);
+    setSavedCareer(nextSave);
+    setStage({ kind: 'career', clubId: newClubId });
+  }
+
   if (stage === 'title') {
-    const savedClub = savedCareer ? ALL_CLUBS.find((c) => c.id === savedCareer.clubId) : undefined;
-    const savedLeague = savedCareer ? getLeagueForClub(savedCareer.clubId) : undefined;
+    const isUnemployedSave = savedCareer?.status === 'unemployed';
+    const savedClub = savedCareer && !isUnemployedSave ? ALL_CLUBS.find((c) => c.id === savedCareer.clubId) : undefined;
+    const savedLeague = savedClub ? getLeagueForClub(savedClub.id) : undefined;
     return (
       <TitleScreen
         onNewCareer={() => {
@@ -29,17 +40,24 @@ function App() {
           setStage('managerName');
         }}
         continueLabel={
-          savedClub
-            ? `Continue as ${savedClub.shortName}${savedLeague ? ` (${savedLeague.name})` : ''} — ${savedCareer?.managerName}, Season ${savedCareer?.seasonNumber ?? 1}`
-            : undefined
+          isUnemployedSave
+            ? `Continue as Unemployed Manager — ${savedCareer.managerName}, Season ${savedCareer.seasonNumber}`
+            : savedClub
+              ? `Continue as ${savedClub.shortName}${savedLeague ? ` (${savedLeague.name})` : ''} — ${savedCareer?.managerName}, Season ${savedCareer && !isUnemployedSave ? (savedCareer.seasonNumber ?? 1) : 1}`
+              : undefined
         }
         onContinueCareer={
-          savedCareer && savedClub
+          isUnemployedSave
             ? () => {
                 setManagerName(savedCareer.managerName);
-                setStage({ kind: 'career', clubId: savedCareer.clubId });
+                setStage('unemployed');
               }
-            : undefined
+            : savedCareer && savedClub
+              ? () => {
+                  setManagerName(savedCareer.managerName);
+                  setStage({ kind: 'career', clubId: savedClub.id });
+                }
+              : undefined
         }
       />
     );
@@ -64,6 +82,19 @@ function App() {
     );
   }
 
+  if (stage === 'unemployed') {
+    // Only reachable via a real transition (a sacking, or the title
+    // screen's unemployed-continue branch above) — both always set
+    // savedCareer to an unemployed save before/with this stage, so it's
+    // never actually missing here; the fallback just satisfies the type.
+    const unemployedSave = savedCareer && savedCareer.status === 'unemployed' ? savedCareer : undefined;
+    return (
+      <div className="min-h-screen bg-pitch">
+        {unemployedSave && <UnemployedScreen initialSave={unemployedSave} onApply={handleTakeNewJob} />}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-pitch">
       {stage.kind === 'clubSelect' ? (
@@ -76,7 +107,7 @@ function App() {
         <ClubRoute
           clubId={stage.clubId}
           managerName={managerName}
-          initialSave={savedCareer ?? undefined}
+          initialSave={savedCareer && savedCareer.status !== 'unemployed' ? savedCareer : undefined}
           onChangeClub={() => {
             // "Change Club" abandons this career — the save would otherwise
             // be silently overwritten by whatever club is picked next, but
@@ -87,13 +118,14 @@ function App() {
             setSavedCareer(null);
             setStage('leagueSelect');
           }}
-          onTakeNewJob={(newClubId, nextSave) => {
-            // A sacking, unlike "Change Club," keeps the career going —
-            // same remount-via-key mechanism, just saving the carried-over
-            // state first instead of clearing it. See PLAN.md.
+          onTakeNewJob={handleTakeNewJob}
+          onBecomeUnemployed={(nextSave) => {
+            // Being sacked, like "Change Club," moves away from this
+            // club's CareerScreen entirely — but keeps the career going
+            // (as an unemployed spell) rather than abandoning it.
             saveCareer(nextSave);
             setSavedCareer(nextSave);
-            setStage({ kind: 'career', clubId: newClubId });
+            setStage('unemployed');
           }}
         />
       )}
@@ -107,12 +139,14 @@ function ClubRoute({
   initialSave,
   onChangeClub,
   onTakeNewJob,
+  onBecomeUnemployed,
 }: {
   clubId: string;
   managerName: string;
-  initialSave?: CareerSaveData;
+  initialSave?: EmployedSaveData;
   onChangeClub: () => void;
-  onTakeNewJob: (newClubId: string, nextSave: CareerSaveData) => void;
+  onTakeNewJob: (newClubId: string, nextSave: EmployedSaveData) => void;
+  onBecomeUnemployed: (nextSave: UnemployedSaveData) => void;
 }) {
   const club = ALL_CLUBS.find((c) => c.id === clubId);
   const squad = SQUADS_BY_CLUB_ID[clubId];
@@ -133,7 +167,18 @@ function ClubRoute({
   }
 
   // key={club.id} forces a fresh CareerScreen (and its fixtures/table/XI state) whenever the club changes.
-  return <CareerScreen key={club.id} club={club} squad={squad} managerName={managerName} onChangeClub={onChangeClub} onTakeNewJob={onTakeNewJob} initialSave={initialSave} />;
+  return (
+    <CareerScreen
+      key={club.id}
+      club={club}
+      squad={squad}
+      managerName={managerName}
+      onChangeClub={onChangeClub}
+      onTakeNewJob={onTakeNewJob}
+      onBecomeUnemployed={onBecomeUnemployed}
+      initialSave={initialSave}
+    />
+  );
 }
 
 export default App;

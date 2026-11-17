@@ -7,9 +7,14 @@ import type { ClubListing } from '../data/premierLeague0809';
  * An unsolicited job offer — the one genuinely voluntary way to leave a
  * job in this game without being sacked (see engine/managers.ts
  * checkForJobApproach): doing well enough, for long enough, with some
- * other same-league club currently vacant, triggers a real Accept/
- * Decline choice. Unlike ManagerSackedScreen's forced shortlist, this is
- * always exactly one specific club making contact.
+ * OTHER club currently vacant — any league/tier, not just the player's
+ * own, weighted toward tiers that match how well they're doing —
+ * triggers a real Accept/Decline choice. `leagueName` is the
+ * APPROACHING club's own league (which, now that approaches can cross
+ * leagues, is not necessarily the player's current one), not the
+ * player's current league. Unlike being sacked (which now leads to a
+ * proper unemployed spell — see UnemployedScreen.tsx), this is always
+ * exactly one specific club making contact.
  */
 export function ManagerApproachScreen({
   approachingClub,

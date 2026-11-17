@@ -1957,3 +1957,143 @@ disabled (0/11), clicking Select Team opened the full persistent Team
 Selection screen (nav and all), Coach's Help filled the XI to 11/11,
 and Continue returned to the playoff overlay with Play Next Leg now
 enabled. Full suite, `tsc`, `eslint` clean.
+
+## Added: indefinite unemployment + cross-league job offers/approaches
+
+Feature request: being sacked used to force an immediate pick from a
+same-league shortlist (`ManagerSackedScreen`/`pickSackedJobOffers`) —
+no real gap, and no club outside the league just left was ever
+reachable. Wanted instead: genuine unemployment (browse and apply to
+real vacancies for as long as you like, racing the normal AI
+auto-fill timer), and both that vacancy board and the existing
+"approached while doing well" mechanic spanning every league/tier —
+weighted toward tiers that match how well the player is doing, not
+restricted to one tier up/down.
+
+This replaces the forced-shortlist sacking flow entirely (superseded,
+not kept alongside) and extends the voluntary approach mechanic to be
+cross-league. Everything reuses the existing `BackgroundLeagueState`
+shape (fixtures/table/managers/news/playoff per league) as the one
+unit of "a league ticking along on its own" — an unemployed spell is
+modeled as all 5 leagues running as background leagues with no managed
+one, which is also exactly what the league just left needs to become.
+
+**`engine/managers.ts`**: deleted `pickSackedJobOffers` (fully
+superseded). `checkForJobApproach` now takes a `currentTier` and a
+list of `{ clubId, tier }` candidates (not a flat same-league id list),
+picking via the existing `weightedPick` helper (`engine/rng.ts`)
+instead of uniformly: same-tier gets a flat baseline weight, a less
+prestigious tier always gets a flat lower weight (a smaller club still
+wants a proven manager), and a more prestigious tier scales from 0 at
+`MANAGER_SECURE_THRESHOLD` up to the same weight as same-tier as
+`jobSecurity` approaches 100 — so a step up the pyramid stays rare
+unless the player is doing very well. All existing gates (grace period,
+cooldown, the fire-or-not roll) are unchanged and still consume RNG in
+the same fixed order regardless of outcome.
+
+**`utils/leagueZones.ts`**: added `tierRank` (top=1 … fourth=4) for the
+weighting above and for the Unemployed screen's display grouping.
+
+**`utils/pyramid.ts`**: extracted `startNewSeason()`'s existing
+per-boundary accumulation loop (the "club in two leagues" fix from
+earlier this session) into an exported `applyPyramidTransitions` —
+same body, parameterized on an `outcomeFor` callback instead of
+closing over CareerScreen's locals. Used both by `startNewSeason()`
+and by the new unemployed-spell season rollover, so both share one
+tested implementation.
+
+**New `utils/careerTransition.ts`**: `managedLeagueToBackgroundState`
+(turns the currently-managed league's live state into an ordinary
+`BackgroundLeagueState` with the player's own club marked vacant — the
+shape every other league already has), `takeOverClub` (splits a club's
+league out of a flat list of every league's background state — the new
+managed one — from the rest, which become the new `backgroundLeagues`),
+and `advanceUnemployedMatchday` (one matchday across every league in an
+unemployed spell, rolling over into a fresh season via
+`applyPyramidTransitions` once every league's own season — and playoff,
+where one applies — is complete).
+
+**`utils/careerStorage.ts`**: `CareerSaveData` is now a union of
+`EmployedSaveData` (everything as before, `status?: 'employed'`
+absent-means-employed for back-compat) and a new `UnemployedSaveData`
+(`managerName`, `seasonNumber`, all 5 leagues as `BackgroundLeagueState[]`,
+`allSquads` — `leagueClubIds` isn't stored separately since it's just
+`leagues[].clubIds`). The validator branches on `status`.
+
+**New `screens/UnemployedScreen.tsx`**: owns its own state and
+autosaves exactly like `CareerScreen` does. Shows every genuinely
+vacant club across all 5 leagues, grouped by league, with how long
+each has been vacant and an Apply button; an Advance button steps
+every league forward one matchday (reusing `advanceUnemployedMatchday`).
+Applying pulls that club's league out via `takeOverClub` and builds a
+fresh `EmployedSaveData` from it (fresh confidence, empty XI, `'team'`
+screen) — the same shape `CareerScreen.handleTakeNewJob` builds for a
+voluntary approach-accept.
+
+**`screens/CareerScreen.tsx`**: new `onBecomeUnemployed` prop (sacking
+now calls this instead of setting the old `sackedState`).
+`applyManagerUpdatesForMatchday` was changed from a function that
+called setState itself into one that returns a result — its two call
+sites already have the freshest `allSquads`/`backgroundLeagues` as
+plain local values at that point in the same synchronous handler
+(computed earlier, before any setState from this matchday has actually
+re-rendered), which a sacking needs for a fully consistent
+unemployed-handoff snapshot; reading this component's own closed-over
+state instead risked handing off a snapshot missing this same
+matchday's own background-league results.
+`advanceBackgroundLeaguesOnce` now also returns the freshly-advanced
+leagues array as a plain value for the same reason. The cross-league
+approach candidate list concatenates the managed league's own vacant
+clubs with every background league's vacant clubs (each tagged with
+its own tier). `handleTakeNewJob` (now reachable only via the
+voluntary approach Accept button) goes cross-league the same way the
+Unemployed screen's Apply does. Fixed a latent same-league assumption
+in the approach overlay: it now passes the *approaching* club's own
+current league name to `ManagerApproachScreen` (found via
+`backgroundLeagues`, not the static `getLeagueForClub`, since
+promotion/relegation can have moved it) instead of the player's own —
+harmless before since approaches were always same-league, a real bug
+now that they aren't. Deleted `sackedState` entirely, along with its
+overlay branch and `ManagerSackedScreen` import/render.
+`startNewSeason()` now calls `applyPyramidTransitions` instead of
+inlining the loop.
+
+Deleted `screens/ManagerSackedScreen.tsx` (superseded). Updated stale
+doc-comment references to it in `ManagersScreen.tsx`/
+`ManagerApproachScreen.tsx`.
+
+**`App.tsx`**: `Stage` gained `'unemployed'`. The title screen's
+"Continue" branches on `savedCareer.status` (an unemployed save shows
+"Continue as Unemployed Manager — {name}, Season {N}" and routes
+straight to the Unemployed screen). `ClubRoute` gained
+`onBecomeUnemployed`, implemented the same way as `onChangeClub`/
+`onTakeNewJob` already are: save + switch stage. `onTakeNewJob` is one
+shared handler reused by both `ClubRoute` (an approach-accept) and the
+new `UnemployedScreen` (an Apply) — both are exactly "save this
+EmployedSaveData and jump to that club's career."
+
+Verified: `engine/__tests__/managers.test.ts` updated for
+`checkForJobApproach`'s new signature plus a new seeded-trials test
+confirming a higher-tier candidate is chosen meaningfully more often
+at high `jobSecurity` than at just-over-threshold; `pyramid.test.ts`'s
+three-boundary regression now calls the real `applyPyramidTransitions`
+instead of a duplicated loop; new `careerTransition.test.ts` covers
+`managedLeagueToBackgroundState`/`takeOverClub` and
+`advanceUnemployedMatchday` (confirms a real rollover produces 5 fresh
+leagues with no club duplicated, reusing the pyramid fix);
+`careerStorage.test.ts` round-trips both save shapes and confirms an
+old save with no `status` field still loads as employed. Full suite
+(172 tests), `tsc`, `eslint` clean.
+
+Live (localStorage injection): seeded a sack-worthy state for a
+Championship club, played a fixture to trigger the sacking — landed on
+the new Unemployed screen (not the old forced shortlist) rather than
+an immediate job; injected a second vacancy in the Premier League,
+reloaded, and confirmed the vacancy board correctly grouped both by
+league. Applied to the Premier League club (a different league and
+tier than the one just left) and confirmed the resulting CareerScreen
+correctly managed that club in that league, with the correct
+backgroundLeagues (including the just-left league), and that the old
+club showed "Vacant" in that league's own Managers view. The title
+screen's "Continue as Unemployed Manager" label and resume flow were
+also confirmed working across a reload.
