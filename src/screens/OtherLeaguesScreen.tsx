@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Panel } from '../components/ui/Panel';
-import { LEAGUES } from '../data/leagues';
+import { ALL_CLUBS, LEAGUES } from '../data/leagues';
 import { computeLeagueTable } from '../engine';
 import type { Player } from '../engine/types';
 import { isBackgroundLeagueSeasonComplete, type BackgroundLeagueState } from '../utils/backgroundLeague';
@@ -70,7 +70,7 @@ export function OtherLeaguesScreen({ backgroundLeagues, allSquads }: { backgroun
           />
         ) : (
           <ManagersScreen
-            clubs={league.clubs}
+            clubs={ALL_CLUBS.filter((c) => selected.clubIds.includes(c.id))}
             table={table}
             managedClubId=""
             managerNameOf={(id) => selected.managers[id]?.name}

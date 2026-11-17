@@ -1307,7 +1307,7 @@ export function CareerScreen({
 
       {screen === 'managers' && (
         <ManagersScreen
-          clubs={league.clubs}
+          clubs={ALL_CLUBS.filter((c) => ALL_CLUB_IDS.includes(c.id))}
           table={table}
           managedClubId={club.id}
           managerNameOf={(id) => (id === club.id ? managerName : (leagueManagers[id]?.name ?? null))}

@@ -2097,3 +2097,42 @@ backgroundLeagues (including the just-left league), and that the old
 club showed "Vacant" in that league's own Managers view. The title
 screen's "Continue as Unemployed Manager" label and resume flow were
 also confirmed working across a reload.
+
+## Fixed: the Managers tab didn't follow promotion/relegation
+
+Bug report: after a club was promoted or relegated, the Managers tab
+still showed the OLD roster — the promoted club missing, the relegated
+club still listed.
+
+Root cause: both call sites that feed `ManagersScreen` its `clubs`
+list — the managed league's own Managers tab in `CareerScreen.tsx` and
+the background-league Managers toggle in `OtherLeaguesScreen.tsx` —
+passed the STATIC `LeagueDefinition.clubs` (`data/leagues.ts`'s
+original, never-changing roster for that league id) instead of the
+CURRENT roster. Every other screen showing a league's clubs
+(`LeagueTableScreen`, `FixturesScreen`, the table itself) already
+derives its club list from the live, promotion/relegation-aware
+`ALL_CLUB_IDS`/`leagueClubIds`/`bg.clubIds`, so only `ManagersScreen`'s
+two call sites had this latent static-roster bug — invisible until a
+season actually rolled over with a real promotion/relegation, since
+before that the static and live rosters are identical.
+
+Fix: `CareerScreen.tsx` now passes `ALL_CLUBS.filter((c) =>
+ALL_CLUB_IDS.includes(c.id))` (the live roster) instead of
+`league.clubs`; `OtherLeaguesScreen.tsx` now passes `ALL_CLUBS.filter((c)
+=> selected.clubIds.includes(c.id))` for the same reason. Audited every
+other `.clubs` usage in the codebase (`grep`) — the rest are either the
+correct static default for *before* any season has run
+(`leagueClubIds`/background-league seeding, both already `??`-guarded
+by the live state), or unrelated pre-career screens (`LeagueSelectScreen`,
+`ClubListScreen`) where no promotion/relegation concept applies yet.
+
+Verified live: using a real generated save, swapped a relegated
+Premier League club for a promoted Championship club directly in
+`leagueClubIds.premier-league` (simulating a season having already
+rolled over), confirmed the managed league's Managers tab now shows
+exactly the 20 live clubs — the promoted club present with its
+manager, the relegated one gone. Repeated the same swap on a
+background league's own `clubIds`/`managers` and confirmed
+`OtherLeaguesScreen`'s Managers toggle reflects it too. `tsc`, full
+suite (172 tests, unaffected), `eslint` clean.
