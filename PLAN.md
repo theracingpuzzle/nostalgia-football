@@ -2216,3 +2216,42 @@ opens from the now-clickable CareerNav header mid-career; forced a
 real sacking and confirmed a new `sacked` entry (correct partial
 record/position) appeared at the top of history, reachable from the
 Unemployed screen's own clickable header.
+
+## Fixed: a sacked AI manager could be immediately rehired by the same club
+
+Bug report: managers seemed to end up back at the same club.
+
+Root cause: `engine/managers.ts`'s `fillStaleVacancies` (which fills
+any vacancy open `MANAGER_VACANCY_FILL_MATCHDAYS` or longer with a
+fresh placeholder name) only ever excluded names currently employed
+AT SOME OTHER CLUB — a just-sacked manager is, by definition, employed
+nowhere, so nothing stopped `pickReplacementManagerName` drawing that
+exact name straight back for the very club that had just fired them.
+Over a long career this produced the same name cycling in and out of
+the same club repeatedly, which is what "end up back at the same
+club" actually was.
+
+Fix: `ClubManagerState` gained `previousName?: string | null` — set to
+the outgoing manager's name the moment `updateLeagueManagers` sacks
+them, and cleared back to `null` the moment `fillStaleVacancies`
+fills that same vacancy (a one-shot exclusion for THIS vacancy, not a
+permanent ban from ever managing that club again — a manager can
+still take a DIFFERENT vacant job, or even return to this one much
+later, once it's turned over again). `fillStaleVacancies` now adds
+each club's own `previousName` to its candidate-exclusion set,
+per-club (not globally — a manager fired by Club A can still be hired
+by Club B in the very same pass). The player's own old club becoming
+vacant (`utils/careerTransition.ts`'s `managedLeagueToBackgroundState`)
+didn't need the same fix — the player's name is never drawn from
+`PLACEHOLDER_MANAGER_POOL` in the first place, so there was nothing
+for it to exclude.
+
+Verified: new test in `engine/__tests__/managers.test.ts` runs 200
+seeds confirming a club's own just-sacked manager is never drawn to
+refill that same vacancy (this would fail immediately without the
+fix, since the sacked name is otherwise a perfectly valid unemployed
+candidate); confirmed `previousName` is set on sacking and cleared on
+fill. Full suite (179 tests), `tsc`, `eslint` clean. No live/browser
+check — this is pure background-simulation logic with no UI surface
+of its own, already exhaustively covered by the new deterministic
+seeded test.

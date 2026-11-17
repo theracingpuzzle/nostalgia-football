@@ -26,6 +26,17 @@ export interface ClubManagerState {
    * has the current state lasted" meaning either way.
    */
   tenureStartMatchday: number;
+  /**
+   * The manager who most recently left this specific club — set only
+   * when a sacking creates the vacancy, and only ever consulted once,
+   * by `fillStaleVacancies`, to stop a club immediately rehiring the
+   * person it just fired (see PLAN.md — without this, nothing stopped
+   * `pickReplacementManagerName` drawing the same now-unemployed name
+   * straight back for the same vacancy). Cleared back to null the
+   * moment the vacancy is filled — it's a one-shot exclusion for THIS
+   * vacancy, not a permanent ban from ever managing the club again.
+   */
+  previousName?: string | null;
 }
 
 /**
@@ -145,7 +156,7 @@ export function updateLeagueManagers(
     const form = recentFormScore(clubId, fixtures);
     const nextConfidence = computeNextConfidence(state.confidence, position, totalClubs, form);
     if (isSackWorthy(nextConfidence, matchday, state.tenureStartMatchday)) {
-      nextManagers[clubId] = { name: null, confidence: nextConfidence, tenureStartMatchday: matchday };
+      nextManagers[clubId] = { name: null, confidence: nextConfidence, tenureStartMatchday: matchday, previousName: state.name };
       sackings.push({ clubId, outgoingName: state.name, incomingName: null, matchday });
     } else {
       nextManagers[clubId] = { ...state, confidence: nextConfidence };
@@ -160,9 +171,13 @@ export function updateLeagueManagers(
  * or more, draws a fresh placeholder name and resets it to a normal
  * fresh hire — otherwise the league would eventually accumulate
  * permanently-vacant clubs. Never assigns a name already employed
- * elsewhere in `clubIds`, or already claimed by another vacancy filled
- * in this SAME call (two vacancies can cross the threshold on the same
- * matchday).
+ * elsewhere in `clubIds`, already claimed by another vacancy filled in
+ * this SAME call (two vacancies can cross the threshold on the same
+ * matchday), or — per club — the manager that specific club just
+ * sacked (`previousName`): without that last exclusion, a newly-fired
+ * manager is otherwise indistinguishable from any other unemployed
+ * name, so nothing stopped them being immediately rehired by the same
+ * club they were just let go from.
  */
 export function fillStaleVacancies(
   managers: Record<string, ClubManagerState>,
@@ -182,9 +197,11 @@ export function fillStaleVacancies(
   const nextManagers = { ...managers };
   const appointments: ManagerNewsEvent[] = [];
   for (const clubId of staleClubIds) {
-    const incomingName = pickReplacementManagerName(employedElsewhere, random);
+    const previousName = managers[clubId]?.previousName;
+    const excludeForThisClub = previousName ? new Set(employedElsewhere).add(previousName) : employedElsewhere;
+    const incomingName = pickReplacementManagerName(excludeForThisClub, random);
     employedElsewhere.add(incomingName);
-    nextManagers[clubId] = { name: incomingName, confidence: MANAGER_STARTING_CONFIDENCE, tenureStartMatchday: matchday };
+    nextManagers[clubId] = { name: incomingName, confidence: MANAGER_STARTING_CONFIDENCE, tenureStartMatchday: matchday, previousName: null };
     appointments.push({ clubId, outgoingName: null, incomingName, matchday });
   }
   return { nextManagers, appointments };

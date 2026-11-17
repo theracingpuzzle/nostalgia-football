@@ -149,6 +149,7 @@ describe('updateLeagueManagers', () => {
     expect(sackingEvent?.outgoingName).toBe('Manager-a');
     expect(sackingEvent?.incomingName).toBeNull();
     expect(managers['a'].name).toBeNull(); // genuinely vacant, no instant replacement
+    expect(managers['a'].previousName).toBe('Manager-a'); // so fillStaleVacancies can exclude them from their own old job
   });
 
   it('never decays a club that is already vacant', () => {
@@ -229,6 +230,33 @@ describe('fillStaleVacancies', () => {
     expect(nextManagers['a'].name).not.toBeNull();
     expect(nextManagers['b'].name).not.toBeNull();
     expect(nextManagers['a'].name).not.toBe(nextManagers['b'].name);
+  });
+
+  it('never rehires the manager a club just sacked, even though that name is otherwise unemployed (regression: "managers end up back at the same club")', () => {
+    const sackedManagerName = PLACEHOLDER_MANAGER_POOL[0];
+    const matchday = 1 + MANAGER_VACANCY_FILL_MATCHDAYS;
+    for (let seed = 1; seed <= 200; seed++) {
+      const managers: Record<string, ClubManagerState> = {
+        a: { name: null, confidence: 0, tenureStartMatchday: 1, previousName: sackedManagerName },
+        b: { name: 'Manager-b', confidence: 55, tenureStartMatchday: 1 },
+        c: { name: 'Manager-c', confidence: 55, tenureStartMatchday: 1 },
+        d: { name: 'Manager-d', confidence: 55, tenureStartMatchday: 1 },
+      };
+      const { nextManagers } = fillStaleVacancies(managers, clubIds, matchday, createRandom(seed));
+      expect(nextManagers['a'].name).not.toBe(sackedManagerName);
+    }
+  });
+
+  it('clears previousName once a vacancy is filled, so it does not keep excluding that name on a later sacking', () => {
+    const managers: Record<string, ClubManagerState> = {
+      a: { name: null, confidence: 0, tenureStartMatchday: 1, previousName: 'Old Boss' },
+      b: { name: 'Manager-b', confidence: 55, tenureStartMatchday: 1 },
+      c: { name: 'Manager-c', confidence: 55, tenureStartMatchday: 1 },
+      d: { name: 'Manager-d', confidence: 55, tenureStartMatchday: 1 },
+    };
+    const matchday = 1 + MANAGER_VACANCY_FILL_MATCHDAYS;
+    const { nextManagers } = fillStaleVacancies(managers, clubIds, matchday, createRandom(5));
+    expect(nextManagers['a'].previousName).toBeNull();
   });
 });
 
