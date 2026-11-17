@@ -43,8 +43,7 @@ import {
   type BackgroundLeagueState,
 } from '../utils/backgroundLeague';
 import { managedLeagueToBackgroundState, outcomeForCompletedSeason, takeOverClub } from '../utils/careerTransition';
-import { getLeagueZone } from '../utils/leagueZones';
-import { applyPyramidTransitions, ENGLISH_PYRAMID } from '../utils/pyramid';
+import { applyPyramidTransitions, divisionOutcomeForSeason, ENGLISH_PYRAMID } from '../utils/pyramid';
 import { CareerOverviewScreen } from './CareerOverviewScreen';
 import { FixturesScreen } from './FixturesScreen';
 import { LeagueTableScreen } from './LeagueTableScreen';
@@ -621,19 +620,7 @@ export function CareerScreen({
   const hasRealDivisionBelow = pyramidChainIndex !== -1 && pyramidChainIndex < ENGLISH_PYRAMID.length - 1;
   const divisionOutcome: DivisionOutcome | null = !fullSeasonComplete
     ? null
-    : league.tier !== 'top' && managedPlayoff
-      ? (() => {
-          if (getLeagueZone(leaguePosition, ALL_CLUB_IDS.length, league.tier) === 'promotion') return 'promoted-automatic';
-          const inSemiFinal1 = managedPlayoff.semiFinal1.higherSeedClubId === club.id || managedPlayoff.semiFinal1.lowerSeedClubId === club.id;
-          const inSemiFinal2 = managedPlayoff.semiFinal2.higherSeedClubId === club.id || managedPlayoff.semiFinal2.lowerSeedClubId === club.id;
-          if (!inSemiFinal1 && !inSemiFinal2) return null; // finished outside the playoff zone — never in the bracket
-          if (managedPlayoff.championClubId === club.id) return 'promoted-playoff';
-          const wonSemiFinal = (inSemiFinal1 && managedPlayoff.semiFinal1Winner === club.id) || (inSemiFinal2 && managedPlayoff.semiFinal2Winner === club.id);
-          return wonSemiFinal ? 'lost-playoff-final' : 'lost-playoff-semifinal';
-        })()
-      : hasRealDivisionBelow && getLeagueZone(leaguePosition, ALL_CLUB_IDS.length, league.tier) === 'relegation'
-        ? 'relegated-real'
-        : null;
+    : divisionOutcomeForSeason(leaguePosition, ALL_CLUB_IDS.length, league.tier, hasRealDivisionBelow, managedPlayoff, club.id);
 
   // Seeds the real promotion playoff (any non-top-tier league has one) the
   // moment the regular season ends, then — once the managed club is no

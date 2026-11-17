@@ -2255,3 +2255,50 @@ fill. Full suite (179 tests), `tsc`, `eslint` clean. No live/browser
 check — this is pure background-simulation logic with no UI surface
 of its own, already exhaustively covered by the new deterministic
 seeded test.
+
+## Fixed: being relegated from the Championship (or League One) said "not modeled yet"
+
+Bug report: the season summary says real relegation from the
+Championship "isn't modeled yet," even though it actually is (see the
+earlier managerial/pyramid work in this file) — the user correctly
+suspected this showed up in more than one place.
+
+Root cause: `CareerScreen.tsx`'s `divisionOutcome` computation checked
+the non-top-tier playoff branch BEFORE the real relegation check. That
+branch's own condition (`league.tier !== 'top' && managedPlayoff`) is
+true for ANY non-top-tier league once its regular season ends —
+`managedPlayoff` is seeded automatically the moment that happens,
+regardless of the managed club's own position — so a relegated
+Championship or League One club (never in the promotion zone, never
+in the playoff bracket) took that branch, found no matching case
+inside it, and fell through to `null`. The real relegation check sat
+in the `else` branch right after, completely unreachable for anyone
+but a top-tier (Premier League) relegation, where the tier check
+excludes it from the playoff branch in the first place. League Two's
+own relegation correctly stays "not modeled" either way (nothing real
+is modeled below it), so that one case was never affected.
+
+Fix: extracted the whole computation into a new, independently
+testable `utils/pyramid.ts::divisionOutcomeForSeason`, with relegation
+checked first (mutually exclusive with the promotion/playoff zones
+anyway, so order never mattered for any OTHER case) — `CareerScreen.tsx`
+now just calls it. Since the Career Overview's own
+`outcomeForCompletedSeason` already reads whatever `divisionOutcome`
+CareerScreen computes, a relegated season's history entry is now
+correctly tagged `relegated-real` too, not `stayed`, going forward
+(nothing can retroactively fix an entry already saved before this fix).
+
+Verified: 11 new cases in `utils/__tests__/pyramid.test.ts` covering
+every tier/position/playoff combination — Championship relegation,
+League One relegation (same shape, confirming the user's "a few
+places" suspicion), League Two relegation (still correctly null),
+Premier League relegation (still correctly worked, unaffected),
+La Liga (still correctly null), every promotion/playoff outcome
+(automatic, won the final, lost the semi, lost the final), and two
+genuine mid-table cases. Full suite (190 tests), `tsc`, `eslint`
+clean. Live: started a real Championship career, forced a full
+46-match relegation-position season via localStorage injection,
+confirmed the season summary now shows "Relegated — Down to League
+One next season" instead of the old disclaimer, and confirmed
+clicking "Start Season 2" correctly moved the club into League One
+with a `relegated-real`-tagged Career Overview entry.

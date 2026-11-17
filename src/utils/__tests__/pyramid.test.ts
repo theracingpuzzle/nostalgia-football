@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { getLeagueZone } from '../leagueZones';
-import { applyPyramidTransitions, computePyramidTransition, ENGLISH_PYRAMID } from '../pyramid';
+import type { PlayoffState, TwoLegTie } from '../../engine/playoffs';
 import type { LeagueTableRow } from '../../engine/types';
+import { getLeagueZone } from '../leagueZones';
+import { applyPyramidTransitions, computePyramidTransition, divisionOutcomeForSeason, ENGLISH_PYRAMID } from '../pyramid';
 
 function row(clubId: string): LeagueTableRow {
   return { clubId, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0 };
@@ -189,5 +190,94 @@ describe('three-boundary pyramid chain (regression: no club should ever end up i
     expect(result['league-one']).toContain('l2-6'); // the playoff winner
     expect(result['league-two']).not.toContain('l2-1');
     expect(result['league-two']).not.toContain('l2-6');
+  });
+});
+
+/**
+ * Regression test for the "relegated from the Championship still says
+ * not modeled yet" bug: `divisionOutcomeForSeason` used to check the
+ * non-top-tier playoff branch BEFORE relegation, and that branch's own
+ * condition (tier !== 'top' && managedPlayoff) is already true for a
+ * relegated club too — `managedPlayoff` is seeded the instant a
+ * non-top-tier league's regular season ends, regardless of the managed
+ * club's own position — so a relegated Championship/League One club
+ * fell all the way through the playoff branch's own fallthrough `null`
+ * and never reached the real relegation check at all. Only a top-tier
+ * (Premier League) relegation worked, since the playoff branch's own
+ * tier check excluded it.
+ */
+describe('divisionOutcomeForSeason', () => {
+  function tie(id: string, higherSeedClubId: string, lowerSeedClubId: string): TwoLegTie {
+    const leg1 = { id: `${id}-leg1`, matchday: 1, homeClubId: lowerSeedClubId, awayClubId: higherSeedClubId, played: true, result: null };
+    const leg2 = { id: `${id}-leg2`, matchday: 2, homeClubId: higherSeedClubId, awayClubId: lowerSeedClubId, played: true, result: null };
+    return { id, higherSeedClubId, lowerSeedClubId, leg1, leg2, wentToExtraTime: false, penaltyShootout: null };
+  }
+
+  function makePlayoff(overrides: Partial<PlayoffState> = {}): PlayoffState {
+    return {
+      table: [],
+      semiFinal1: tie('sf1', 'sf1-higher', 'sf1-lower'),
+      semiFinal2: tie('sf2', 'sf2-higher', 'sf2-lower'),
+      semiFinal1Winner: null,
+      semiFinal2Winner: null,
+      final: null,
+      finalWentToExtraTime: false,
+      finalPenaltyShootout: null,
+      championClubId: null,
+      nextSeed: 1,
+      ...overrides,
+    };
+  }
+
+  it('relegated from the Championship is relegated-real, not null — the actual bug report', () => {
+    const playoff = makePlayoff(); // seeded regardless of the managed club's own position, same as the real app
+    expect(divisionOutcomeForSeason(23, 24, 'second', true, playoff, 'some-other-club')).toBe('relegated-real');
+  });
+
+  it('relegated from League One is relegated-real too (same shape as Championship)', () => {
+    const playoff = makePlayoff();
+    expect(divisionOutcomeForSeason(22, 24, 'third', true, playoff, 'some-other-club')).toBe('relegated-real');
+  });
+
+  it('relegated from League Two stays null — genuinely not modeled, nothing real below it', () => {
+    const playoff = makePlayoff();
+    expect(divisionOutcomeForSeason(24, 24, 'fourth', false, playoff, 'some-other-club')).toBeNull();
+  });
+
+  it('relegated from the Premier League (top tier, no playoff involved at all) is still relegated-real', () => {
+    expect(divisionOutcomeForSeason(18, 20, 'top', true, null, 'some-club')).toBe('relegated-real');
+  });
+
+  it('relegated from La Liga stays null — not in the pyramid chain at all', () => {
+    expect(divisionOutcomeForSeason(18, 20, 'top', false, null, 'some-club')).toBeNull();
+  });
+
+  it('automatic promotion from the Championship', () => {
+    const playoff = makePlayoff();
+    expect(divisionOutcomeForSeason(2, 24, 'second', true, playoff, 'some-other-club')).toBe('promoted-automatic');
+  });
+
+  it('wins the promotion playoff final', () => {
+    const playoff = makePlayoff({ semiFinal1: tie('sf1', 'our-club', 'sf1-lower'), semiFinal1Winner: 'our-club', championClubId: 'our-club' });
+    expect(divisionOutcomeForSeason(4, 24, 'second', true, playoff, 'our-club')).toBe('promoted-playoff');
+  });
+
+  it('loses the promotion playoff semi-final', () => {
+    const playoff = makePlayoff({ semiFinal1: tie('sf1', 'our-club', 'sf1-lower'), semiFinal1Winner: 'sf1-lower' }); // our club (higher seed) lost
+    expect(divisionOutcomeForSeason(3, 24, 'second', true, playoff, 'our-club')).toBe('lost-playoff-semifinal');
+  });
+
+  it('wins the semi-final but loses the playoff final', () => {
+    const playoff = makePlayoff({ semiFinal1: tie('sf1', 'our-club', 'sf1-lower'), semiFinal1Winner: 'our-club', championClubId: 'sf2-higher' });
+    expect(divisionOutcomeForSeason(3, 24, 'second', true, playoff, 'our-club')).toBe('lost-playoff-final');
+  });
+
+  it('a genuinely mid-table non-top-tier finish (no promotion, no playoff, no relegation) stays null', () => {
+    const playoff = makePlayoff();
+    expect(divisionOutcomeForSeason(12, 24, 'second', true, playoff, 'some-other-club')).toBeNull();
+  });
+
+  it('a mid-table top-tier finish stays null', () => {
+    expect(divisionOutcomeForSeason(10, 20, 'top', true, null, 'some-club')).toBeNull();
   });
 });

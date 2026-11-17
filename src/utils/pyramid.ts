@@ -1,6 +1,8 @@
 import { getLeagueZone } from './leagueZones';
 import { LEAGUES, type LeagueDefinition } from '../data/leagues';
+import type { PlayoffState } from '../engine/playoffs';
 import type { LeagueTableRow } from '../engine/types';
+import type { DivisionOutcome } from '../screens/SeasonSummaryScreen';
 
 /**
  * The real English football pyramid chain, top to bottom, used to drive
@@ -88,4 +90,45 @@ export function applyPyramidTransitions(
     }
   }
   return nextLeagueClubIds;
+}
+
+/**
+ * The real division-crossing result for a club's just-finished season,
+ * if one applies — used by CareerScreen's SeasonSummaryScreen (and, via
+ * utils/careerTransition.ts's `outcomeForCompletedSeason`, the Career
+ * Overview). Only ever called once a season is actually complete.
+ *
+ * Relegation is checked FIRST, before the non-top-tier playoff branch
+ * below — a relegated club is never in the promotion zone or the
+ * playoff bracket, so folding it into that branch (as this used to do)
+ * made it unreachable for Championship/League One: `managedPlayoff` is
+ * seeded for any non-top-tier league the instant its regular season
+ * ends, regardless of the managed club's own position, so the playoff
+ * branch's own condition was already true for a relegated club too —
+ * and that branch had no relegation case of its own, so it fell
+ * through to null instead of ever reaching a real relegation check.
+ * That only correctly fired for a top-tier (Premier League) relegation,
+ * where the playoff branch's tier check excludes it.
+ */
+export function divisionOutcomeForSeason(
+  leaguePosition: number,
+  totalClubs: number,
+  tier: LeagueDefinition['tier'],
+  hasRealDivisionBelow: boolean,
+  managedPlayoff: PlayoffState | null,
+  clubId: string,
+): DivisionOutcome | null {
+  if (hasRealDivisionBelow && getLeagueZone(leaguePosition, totalClubs, tier) === 'relegation') return 'relegated-real';
+
+  if (tier !== 'top' && managedPlayoff) {
+    if (getLeagueZone(leaguePosition, totalClubs, tier) === 'promotion') return 'promoted-automatic';
+    const inSemiFinal1 = managedPlayoff.semiFinal1.higherSeedClubId === clubId || managedPlayoff.semiFinal1.lowerSeedClubId === clubId;
+    const inSemiFinal2 = managedPlayoff.semiFinal2.higherSeedClubId === clubId || managedPlayoff.semiFinal2.lowerSeedClubId === clubId;
+    if (!inSemiFinal1 && !inSemiFinal2) return null; // finished outside the playoff zone — never in the bracket
+    if (managedPlayoff.championClubId === clubId) return 'promoted-playoff';
+    const wonSemiFinal = (inSemiFinal1 && managedPlayoff.semiFinal1Winner === clubId) || (inSemiFinal2 && managedPlayoff.semiFinal2Winner === clubId);
+    return wonSemiFinal ? 'lost-playoff-final' : 'lost-playoff-semifinal';
+  }
+
+  return null;
 }
