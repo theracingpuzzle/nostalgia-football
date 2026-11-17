@@ -2325,3 +2325,31 @@ Team, confirmed every pitch slot read "empty" again and all 11
 players returned to the Substitutes/Squad lists, with the button
 itself immediately greying out once there was nothing left to clear.
 `tsc`, full suite (190 tests, unaffected), `eslint` clean.
+
+## Fixed: "Start Season N" unreadable for a white-kitted club
+
+Bug report: managing a club with a white primary colour made the
+season-summary screen's "Start Season N" button unreadable.
+
+Root cause: `SeasonSummaryScreen.tsx`'s `Button` only overrode
+`backgroundColor`/`borderColor` to the club's colours, never `color` —
+so the `Button` component's own default `text-white` class stayed in
+effect, leaving white-on-white (or near enough) for any club whose
+primary colour is white or very light (Real Madrid, Preston, Swansea,
+Derby, several more — every white-primary club in the data, not a
+single isolated case). Every OTHER place in the codebase that colours
+a button/panel this way (`TeamSelectionScreen.tsx`'s Continue button
+and formation picker, `Panel.tsx`'s accent header, `CareerNav.tsx`)
+already pairs the background with a `getContrastTextColor`-computed
+text colour — this was the one place that didn't.
+
+Fix: added `color: getContrastTextColor(club.primaryColor)` to the
+same style object, matching the existing pattern exactly. Audited
+every other `backgroundColor:` style usage in the codebase (`grep`) —
+this was the only gap.
+
+Verified live: managed Real Madrid (white primary), forced a complete
+season, confirmed the "Start Season 2" button's computed style is
+black text (`rgb(0,0,0)`) on a white background — clearly readable,
+where it was previously white-on-white. `tsc`, full suite (190 tests,
+unaffected), `eslint` clean.

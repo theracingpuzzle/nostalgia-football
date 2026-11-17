@@ -8,6 +8,7 @@ import { ALL_CLUBS } from '../data/leagues';
 import type { LeagueDefinition } from '../data/leagues';
 import { computeMonthlyPlayerStats, pickTeamOfTheMonth } from '../engine';
 import type { Fixture, LeagueTableRow, Player } from '../engine/types';
+import { getContrastTextColor } from '../utils/colorContrast';
 import { getLeagueZone, ordinal } from '../utils/leagueZones';
 import type { PlayerSeasonTotal } from './StatsScreen';
 
@@ -201,7 +202,7 @@ export function SeasonSummaryScreen({
         <Button variant="secondary" onClick={onClose}>
           Review First
         </Button>
-        <Button style={{ backgroundColor: club.primaryColor, borderColor: club.secondaryColor }} onClick={onNewSeason}>
+        <Button style={{ backgroundColor: club.primaryColor, borderColor: club.secondaryColor, color: getContrastTextColor(club.primaryColor) }} onClick={onNewSeason}>
           Start Season {seasonNumber + 1}
         </Button>
       </div>
