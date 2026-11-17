@@ -72,6 +72,7 @@ export function CareerNav({
   jobSecurity,
   onNavigate,
   onChangeClub,
+  onOpenCareerOverview,
 }: {
   club: ClubListing;
   managerName: string;
@@ -86,6 +87,8 @@ export function CareerNav({
   jobSecurity: number;
   onNavigate: (screen: CareerScreenId) => void;
   onChangeClub: () => void;
+  /** Opens the Career Overview — the manager's full club-by-club/season-by-season history (see screens/CareerOverviewScreen.tsx). The "Managed by..." line doubles as the button for it, same identity-area placement the Unemployed screen's own header uses. */
+  onOpenCareerOverview: () => void;
 }) {
   const textColor = getContrastTextColor(club.primaryColor);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -101,9 +104,14 @@ export function CareerNav({
             <span className="block truncate text-base font-bold uppercase tracking-wider" style={{ color: textColor }}>
               {club.name}
             </span>
-            <span className="block truncate text-[11px] font-semibold" style={{ color: textColor, opacity: 0.75 }}>
+            <button
+              onClick={onOpenCareerOverview}
+              className="block truncate text-left text-[11px] font-semibold underline-offset-2 hover:underline"
+              style={{ color: textColor, opacity: 0.75 }}
+              title="View Career Overview"
+            >
               Managed by {managerName} · Season {seasonNumber}
-            </span>
+            </button>
           </div>
           <button
             onClick={() => onNavigate('table')}

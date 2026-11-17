@@ -22,6 +22,40 @@ const STORAGE_KEY = 'fsm-career-v1';
  */
 export type CareerSaveData = EmployedSaveData | UnemployedSaveData;
 
+/**
+ * One completed (or ended-early) managerial stint, for the Career
+ * Overview screen. `champion`/`stayed` only ever apply where there's
+ * no real promotion/relegation at all (a top-tier league, or any
+ * league not linked into utils/pyramid.ts's ENGLISH_PYRAMID) — see
+ * utils/careerTransition.ts's `outcomeForCompletedSeason`. `sacked`
+ * and `left` cover a stint that ended mid-season rather than running
+ * its full course.
+ */
+export type CareerHistoryOutcome =
+  | 'champion'
+  | 'promoted-automatic'
+  | 'promoted-playoff'
+  | 'lost-playoff-semifinal'
+  | 'lost-playoff-final'
+  | 'relegated-real'
+  | 'stayed'
+  | 'sacked'
+  | 'left';
+
+export interface CareerHistoryEntry {
+  clubId: string;
+  leagueId: string;
+  seasonNumber: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  /** Table position at the moment this stint ended (1-indexed). */
+  position: number;
+  totalClubs: number;
+  outcome: CareerHistoryOutcome;
+}
+
 export interface EmployedSaveData {
   /** Absent on every save from before unemployment existed — treated as 'employed' (the only thing a save could be back then). */
   status?: 'employed';
@@ -30,6 +64,8 @@ export interface EmployedSaveData {
   managerName: string;
   /** Which season of the career this is — 1 for a brand new career, incremented every startNewSeason(). Absent on an old save, treated as 1 (no way to know how many seasons it's already been through). */
   seasonNumber?: number;
+  /** Every completed-or-ended-early stint so far, oldest first — absent on an old save, treated as []. See screens/CareerOverviewScreen.tsx. */
+  careerHistory?: CareerHistoryEntry[];
   /**
    * Which clubs currently make up each league (keyed by league id) —
    * absent on an old save, which just means "no promotion/relegation has
@@ -79,6 +115,8 @@ export interface UnemployedSaveData {
   seasonNumber: number;
   leagues: BackgroundLeagueState[];
   allSquads: Record<string, Player[]>;
+  /** Carried through unchanged while unemployed — no stint is in progress to add to it. See EmployedSaveData.careerHistory. */
+  careerHistory?: CareerHistoryEntry[];
 }
 
 /** Minimal shape check — enough to reject corrupted/foreign JSON without trusting it blindly. */

@@ -4,11 +4,14 @@ export function TitleScreen({
   onNewCareer,
   continueLabel,
   onContinueCareer,
+  onViewCareerOverview,
 }: {
   onNewCareer: () => void;
   /** e.g. "Continue as Arsenal — Test Manager". Omit (or pass no onContinueCareer) to hide the option entirely. */
   continueLabel?: string;
   onContinueCareer?: () => void;
+  /** Opens the Career Overview directly from the title screen, reading the save without entering a career — omit to hide the option (no save exists yet). */
+  onViewCareerOverview?: () => void;
 }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 p-4 text-center text-white">
@@ -29,6 +32,11 @@ export function TitleScreen({
         <Button variant={onContinueCareer ? 'secondary' : 'primary'} className="px-8 py-3 text-base" onClick={onNewCareer}>
           New Career
         </Button>
+        {onViewCareerOverview && (
+          <Button variant="secondary" className="px-8 py-3 text-base" onClick={onViewCareerOverview}>
+            Career Overview
+          </Button>
+        )}
       </div>
     </div>
   );

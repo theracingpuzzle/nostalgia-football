@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Panel } from './components/ui/Panel';
+import { CareerOverviewScreen } from './screens/CareerOverviewScreen';
 import { ClubListScreen } from './screens/ClubListScreen';
 import { CareerScreen } from './screens/CareerScreen';
 import { LeagueSelectScreen } from './screens/LeagueSelectScreen';
@@ -9,6 +10,7 @@ import { UnemployedScreen } from './screens/UnemployedScreen';
 import { SQUADS_BY_CLUB_ID } from './data/clubSquads';
 import { ALL_CLUBS, LEAGUES, getLeagueForClub } from './data/leagues';
 import { clearCareer, loadCareer, saveCareer, type CareerSaveData, type EmployedSaveData, type UnemployedSaveData } from './utils/careerStorage';
+import { currentStintSnapshotFromSave } from './utils/careerTransition';
 
 type Stage = 'title' | 'managerName' | 'leagueSelect' | { kind: 'clubSelect'; leagueId: string } | { kind: 'career'; clubId: string } | 'unemployed';
 
@@ -18,6 +20,9 @@ function App() {
   const [savedCareer, setSavedCareer] = useState<CareerSaveData | null>(() => loadCareer());
   const [stage, setStage] = useState<Stage>('title');
   const [managerName, setManagerName] = useState('');
+  // Lets the title screen show the Career Overview without ever clicking
+  // Continue — reads straight off `savedCareer`, no live career needed.
+  const [showOverviewFromTitle, setShowOverviewFromTitle] = useState(false);
 
   // Reused by both ClubRoute's approach-accept and UnemployedScreen's own
   // Apply action — in both cases it's "save + jump to that club's career,"
@@ -29,6 +34,19 @@ function App() {
   }
 
   if (stage === 'title') {
+    if (showOverviewFromTitle) {
+      return (
+        <div className="min-h-screen bg-pitch">
+          <CareerOverviewScreen
+            managerName={savedCareer?.managerName ?? ''}
+            history={savedCareer?.careerHistory ?? []}
+            currentStint={savedCareer && savedCareer.status !== 'unemployed' ? currentStintSnapshotFromSave(savedCareer) : null}
+            onClose={() => setShowOverviewFromTitle(false)}
+          />
+        </div>
+      );
+    }
+
     const isUnemployedSave = savedCareer?.status === 'unemployed';
     const savedClub = savedCareer && !isUnemployedSave ? ALL_CLUBS.find((c) => c.id === savedCareer.clubId) : undefined;
     const savedLeague = savedClub ? getLeagueForClub(savedClub.id) : undefined;
@@ -59,6 +77,7 @@ function App() {
                 }
               : undefined
         }
+        onViewCareerOverview={savedCareer ? () => setShowOverviewFromTitle(true) : undefined}
       />
     );
   }

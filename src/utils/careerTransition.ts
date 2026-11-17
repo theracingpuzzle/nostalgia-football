@@ -1,12 +1,14 @@
 import { LEAGUES } from '../data/leagues';
 import { computeLeagueTable, type ClubManagerState, type ManagerNewsEvent, type PlayoffState } from '../engine';
 import type { Fixture, Player } from '../engine/types';
+import type { DivisionOutcome } from '../screens/SeasonSummaryScreen';
 import {
   advanceBackgroundLeagueMatchday,
   createBackgroundLeagueState,
   isBackgroundLeagueSeasonComplete,
   type BackgroundLeagueState,
 } from './backgroundLeague';
+import type { CareerHistoryOutcome, EmployedSaveData } from './careerStorage';
 import { applyPyramidTransitions } from './pyramid';
 
 /**
@@ -92,4 +94,50 @@ export function advanceUnemployedMatchday(
 
   const freshLeagues = LEAGUES.map((l) => createBackgroundLeagueState(l.id, nextLeagueClubIds[l.id] ?? l.clubs.map((c) => c.id), Math.floor(Math.random() * 1_000_000) + 1));
   return { leagues: freshLeagues, allSquads: squadsAcc, rolledOver: true };
+}
+
+/** Which league/season/club an EmployedSaveData's OWN data says is in progress right now — read straight from its fixtures, no live CareerScreen state needed. Used by the title screen to show the Career Overview (see CareerOverviewScreen.tsx) without entering a career. */
+export interface CurrentStintSnapshot {
+  clubId: string;
+  leagueId: string;
+  seasonNumber: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  position: number;
+  totalClubs: number;
+}
+
+export function currentStintSnapshotFromSave(save: EmployedSaveData): CurrentStintSnapshot {
+  const clubIds = save.leagueClubIds?.[save.leagueId] ?? LEAGUES.find((l) => l.id === save.leagueId)!.clubs.map((c) => c.id);
+  const table = computeLeagueTable(clubIds, save.fixtures);
+  const row = table.find((r) => r.clubId === save.clubId);
+  const position = table.findIndex((r) => r.clubId === save.clubId) + 1;
+  return {
+    clubId: save.clubId,
+    leagueId: save.leagueId,
+    seasonNumber: save.seasonNumber ?? 1,
+    played: row?.played ?? 0,
+    won: row?.won ?? 0,
+    drawn: row?.drawn ?? 0,
+    lost: row?.lost ?? 0,
+    position,
+    totalClubs: clubIds.length,
+  };
+}
+
+/**
+ * The outcome a stint that ran its full course (startNewSeason, as
+ * opposed to a sacking or a voluntary leave mid-season) gets for the
+ * Career Overview — 'champion' only applies where there's no real
+ * promotion/relegation at all (divisionOutcome null: a top-tier
+ * league, or any league not linked into utils/pyramid.ts's
+ * ENGLISH_PYRAMID), otherwise the real divisionOutcome always wins.
+ * Pulled out as its own pure function so it's independently testable
+ * rather than inlined in CareerScreen.
+ */
+export function outcomeForCompletedSeason(leaguePosition: number, divisionOutcome: DivisionOutcome | null): CareerHistoryOutcome {
+  if (divisionOutcome) return divisionOutcome;
+  return leaguePosition === 1 ? 'champion' : 'stayed';
 }

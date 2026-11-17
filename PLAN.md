@@ -2136,3 +2136,83 @@ manager, the relegated one gone. Repeated the same swap on a
 background league's own `clubIds`/`managers` and confirmed
 `OtherLeaguesScreen`'s Managers toggle reflects it too. `tsc`, full
 suite (172 tests, unaffected), `eslint` clean.
+
+## Added: Career Overview — a persistent manager career history
+
+Feature request: a "career overview" for the player as a manager —
+club and stats — covering the full career, not just the current job.
+Until now nothing survived a season rollover, a sacking, or a
+voluntary club change except what was needed to keep playing; there
+was no record at all of where a manager had been before.
+
+`utils/careerStorage.ts` gained `CareerHistoryEntry` (clubId, leagueId,
+seasonNumber, played/won/drawn/lost, position, totalClubs, and an
+`outcome`: `champion | promoted-automatic | promoted-playoff |
+lost-playoff-semifinal | lost-playoff-final | relegated-real | stayed
+| sacked | left`) and an optional `careerHistory?: CareerHistoryEntry[]`
+on both `EmployedSaveData` and `UnemployedSaveData` (absent on an old
+save, same as every other backward-compat field here, treated as `[]`).
+
+Three places a managerial stint can end now append exactly one entry,
+all in `screens/CareerScreen.tsx`:
+- `startNewSeason()` (stayed at the same club): outcome from the new
+  `utils/careerTransition.ts` `outcomeForCompletedSeason(leaguePosition,
+  divisionOutcome)` — `champion` only where there's no real
+  promotion/relegation at all (`divisionOutcome` null) and position 1,
+  `stayed` for anything else with no real divisionOutcome, otherwise
+  the real `divisionOutcome` passes straight through.
+- `handleTakeNewJob()` (a voluntary cross-league approach-accept):
+  outcome `left`, record/position read from the CURRENT (partial)
+  table at the moment of leaving.
+- `buildUnemployedSaveOnSacking()` (a sacking): outcome `sacked`,
+  record/position recomputed from `fixturesAfter` (not the outer,
+  one-matchday-stale `table`) for an accurate snapshot at the exact
+  sacking moment.
+
+Since the latter two unmount `CareerScreen` right after (a remount via
+`App.tsx`'s `key={club.id}`, or a stage change to `'unemployed'`), both
+build the updated array as a plain local value and hand it straight
+into the save payload rather than going through `setCareerHistory` —
+relying on a pending setState surviving unmount would be fragile.
+`UnemployedScreen.tsx` just carries `careerHistory` through unchanged
+(no stint is in progress while unemployed).
+
+New `screens/CareerOverviewScreen.tsx` — a lifetime-totals panel
+(clubs managed, seasons, full P-W-D-L, win %, trophies = champion +
+either promoted-* outcome, times sacked), an optional "Currently
+Managing" row for the in-progress stint, and the history itself
+reverse-chronological with a small `OUTCOME_STYLES` badge map (same
+pattern as `SeasonSummaryScreen`'s `HEADLINES`). New
+`utils/careerTransition.ts::currentStintSnapshotFromSave` reads a live
+in-progress stint straight off an `EmployedSaveData`'s own `fixtures`
+(via `computeLeagueTable`) with no live `CareerScreen` needed — this is
+what lets the title screen show the current job's live record without
+ever clicking Continue.
+
+Reachable from three places, all rendering the same overlay: the
+"Managed by {name} · Season {N}" text in `CareerNav.tsx` (now a
+button, via a new `onOpenCareerOverview` prop) is clickable; the
+Unemployed screen's own header line is clickable the same way; and
+`TitleScreen.tsx` gained a third "Career Overview" button (new
+optional `onViewCareerOverview` prop, only passed when a save exists
+at all) that `App.tsx` renders in place of the title screen itself
+when clicked, reading `savedCareer.careerHistory` and — for an
+employed save — `currentStintSnapshotFromSave(savedCareer)` directly,
+no career entered.
+
+Verified: new `utils/__tests__/careerTransition.test.ts` cases for
+`currentStintSnapshotFromSave` (played/won/drawn/lost/position/
+totalClubs read correctly from synthetic fixtures, and the
+seasonNumber-absent-on-an-old-save default) and
+`outcomeForCompletedSeason` (champion/stayed when `divisionOutcome` is
+null, every real `divisionOutcome` passed straight through regardless
+of position). Full suite (177 tests), `tsc`, `eslint` clean. Live:
+started a real career, injected three synthetic history entries
+(stayed/sacked/left across three clubs/two leagues) directly into a
+real save, confirmed the title screen's "Career Overview" button
+appears and shows correct lifetime totals plus the live in-progress
+current stint WITHOUT clicking Continue; confirmed the same overlay
+opens from the now-clickable CareerNav header mid-career; forced a
+real sacking and confirmed a new `sacked` entry (correct partial
+record/position) appeared at the top of history, reachable from the
+Unemployed screen's own clickable header.

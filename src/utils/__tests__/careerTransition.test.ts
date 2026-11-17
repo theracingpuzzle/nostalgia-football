@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { SQUADS_BY_CLUB_ID } from '../../data/clubSquads';
 import { LEAGUES } from '../../data/leagues';
 import type { ClubManagerState } from '../../engine';
-import type { Fixture } from '../../engine/types';
+import type { Fixture, MatchResult } from '../../engine/types';
+import type { DivisionOutcome } from '../../screens/SeasonSummaryScreen';
+import type { EmployedSaveData } from '../careerStorage';
 import { createBackgroundLeagueState, isBackgroundLeagueSeasonComplete, type BackgroundLeagueState } from '../backgroundLeague';
-import { advanceUnemployedMatchday, managedLeagueToBackgroundState, takeOverClub } from '../careerTransition';
+import { advanceUnemployedMatchday, currentStintSnapshotFromSave, managedLeagueToBackgroundState, outcomeForCompletedSeason, takeOverClub } from '../careerTransition';
 
 function clubIdsFor(leagueId: string): string[] {
   return LEAGUES.find((l) => l.id === leagueId)!.clubs.map((c) => c.id);
@@ -103,4 +105,93 @@ describe('advanceUnemployedMatchday', () => {
     }
     for (const bg of leagues) expect(isBackgroundLeagueSeasonComplete(bg)).toBe(false);
   }, 20000);
+});
+
+function playedFixture(id: string, matchday: number, homeClubId: string, awayClubId: string, homeGoals: number, awayGoals: number): Fixture {
+  const result: MatchResult = {
+    fixtureId: id,
+    homeGoals,
+    awayGoals,
+    events: [],
+    homeScorers: [],
+    awayScorers: [],
+    homeAssists: [],
+    awayAssists: [],
+    homeBookings: [],
+    awayBookings: [],
+    homeRedCards: [],
+    awayRedCards: [],
+    homeXI: [],
+    awayXI: [],
+    seed: 1,
+  };
+  return { id, matchday, homeClubId, awayClubId, played: true, result };
+}
+
+function makeEmployedSave(overrides: Partial<EmployedSaveData> = {}): EmployedSaveData {
+  return {
+    clubId: 'a',
+    leagueId: 'test-league',
+    managerName: 'Test Manager',
+    leagueClubIds: { 'test-league': ['a', 'b', 'c', 'd'] },
+    screen: 'team',
+    formationId: '4-4-2',
+    selectedXI: [],
+    fixtures: [],
+    nextSeed: 1,
+    lastPlayedFixtureId: null,
+    allSquads: {},
+    transferWindow: null,
+    januaryWindowShown: false,
+    transferOffers: [],
+    transferTimeline: [],
+    seasonSummaryDismissed: false,
+    ...overrides,
+  };
+}
+
+describe('currentStintSnapshotFromSave', () => {
+  it('reads played/won/drawn/lost/position/totalClubs straight from the save\'s own fixtures', () => {
+    const fixtures = [
+      playedFixture('f1', 1, 'a', 'b', 2, 0), // a beats b
+      playedFixture('f2', 2, 'c', 'a', 1, 1), // a draws c
+    ];
+    const save = makeEmployedSave({ clubId: 'a', seasonNumber: 3, fixtures });
+    const snapshot = currentStintSnapshotFromSave(save);
+
+    expect(snapshot).toEqual({
+      clubId: 'a',
+      leagueId: 'test-league',
+      seasonNumber: 3,
+      played: 2,
+      won: 1,
+      drawn: 1,
+      lost: 0,
+      position: 1, // 4 points, top of a 4-club table where nobody else has played
+      totalClubs: 4,
+    });
+  });
+
+  it('defaults seasonNumber to 1 when absent (an old save)', () => {
+    const save = makeEmployedSave({ seasonNumber: undefined });
+    expect(currentStintSnapshotFromSave(save).seasonNumber).toBe(1);
+  });
+});
+
+describe('outcomeForCompletedSeason', () => {
+  it('is champion when finishing 1st with no real divisionOutcome', () => {
+    expect(outcomeForCompletedSeason(1, null)).toBe('champion');
+  });
+
+  it('is stayed when finishing mid-table with no real divisionOutcome', () => {
+    expect(outcomeForCompletedSeason(10, null)).toBe('stayed');
+  });
+
+  it('passes through every real divisionOutcome unchanged, even at position 1', () => {
+    const outcomes: DivisionOutcome[] = ['promoted-automatic', 'promoted-playoff', 'lost-playoff-semifinal', 'lost-playoff-final', 'relegated-real'];
+    for (const outcome of outcomes) {
+      expect(outcomeForCompletedSeason(1, outcome)).toBe(outcome);
+      expect(outcomeForCompletedSeason(15, outcome)).toBe(outcome);
+    }
+  });
 });

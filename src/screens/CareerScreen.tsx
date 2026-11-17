@@ -42,9 +42,10 @@ import {
   isBackgroundLeagueSeasonComplete,
   type BackgroundLeagueState,
 } from '../utils/backgroundLeague';
-import { managedLeagueToBackgroundState, takeOverClub } from '../utils/careerTransition';
+import { managedLeagueToBackgroundState, outcomeForCompletedSeason, takeOverClub } from '../utils/careerTransition';
 import { getLeagueZone } from '../utils/leagueZones';
 import { applyPyramidTransitions, ENGLISH_PYRAMID } from '../utils/pyramid';
+import { CareerOverviewScreen } from './CareerOverviewScreen';
 import { FixturesScreen } from './FixturesScreen';
 import { LeagueTableScreen } from './LeagueTableScreen';
 import { MatchAnimationScreen } from './MatchAnimationScreen';
@@ -64,7 +65,7 @@ import {
   type TransferOffer,
   type TransferTimelineEntry,
 } from './TransferWindowScreen';
-import { saveCareer, type EmployedSaveData, type UnemployedSaveData } from '../utils/careerStorage';
+import { saveCareer, type CareerHistoryEntry, type EmployedSaveData, type UnemployedSaveData } from '../utils/careerStorage';
 
 const AI_FORMATION = FORMATIONS.find((f) => f.id === DEFAULT_FORMATION_ID) ?? FORMATIONS[0];
 
@@ -489,6 +490,14 @@ export function CareerScreen({
   // MANAGER_APPROACH_COOLDOWN_MATCHDAYS so a decline isn't immediately
   // followed by another offer.
   const [managerLastApproachMatchday, setManagerLastApproachMatchday] = useState<number | null>(resume?.managerLastApproachMatchday ?? null);
+  // Every completed-or-ended-early stint so far, oldest first — survives
+  // season rollovers (appended to, never reset) and persists across a
+  // club change via the save payload each transition builds. See
+  // screens/CareerOverviewScreen.tsx.
+  const [careerHistory, setCareerHistory] = useState<CareerHistoryEntry[]>(resume?.careerHistory ?? []);
+  // Not persisted — same reasoning as showPlayoffTeamSelect above, a
+  // purely transient "is this overlay open" flag.
+  const [showCareerOverview, setShowCareerOverview] = useState(false);
 
   // Per-career mutable squads (starts as a copy of the shared static data) so
   // transfer-window swaps only affect this playthrough, not the app-wide
@@ -539,6 +548,7 @@ export function CareerScreen({
       managerNews,
       managerApproachState,
       managerLastApproachMatchday,
+      careerHistory,
       managerName,
       screen,
       formationId,
@@ -566,6 +576,7 @@ export function CareerScreen({
     managerNews,
     managerApproachState,
     managerLastApproachMatchday,
+    careerHistory,
     managerName,
     screen,
     formationId,
@@ -593,6 +604,7 @@ export function CareerScreen({
     ? fixtures.find((f) => f.id === lastPlayedFixtureId) ?? findPlayoffFixture(managedPlayoff, lastPlayedFixtureId)
     : null;
   const leaguePosition = table.findIndex((r) => r.clubId === club.id) + 1;
+  const ownTableRow = table.find((r) => r.clubId === club.id);
   const regularSeasonComplete = fixtures.length > 0 && fixtures.every((f) => f.played);
   // Any non-top-tier league isn't actually done until its promotion playoff
   // is resolved too — a top-tier league finishes the moment its regular
@@ -823,12 +835,34 @@ export function CareerScreen({
       playerConfidence: result.nextConfidence,
       vacantSinceMatchday: matchday,
     });
+    // Recomputed from fixturesAfter (not the outer `table`, which is one
+    // matchday stale at this exact moment) so the career-log entry's
+    // record/position reflect the stint's actual final state.
+    const rowAtSacking = computeLeagueTable(ALL_CLUB_IDS, fixturesAfter);
+    const stintRow = rowAtSacking.find((r) => r.clubId === club.id);
+    const stintPosition = rowAtSacking.findIndex((r) => r.clubId === club.id) + 1;
+    const nextCareerHistory: CareerHistoryEntry[] = [
+      ...careerHistory,
+      {
+        clubId: club.id,
+        leagueId: managedLeagueId,
+        seasonNumber,
+        played: stintRow?.played ?? 0,
+        won: stintRow?.won ?? 0,
+        drawn: stintRow?.drawn ?? 0,
+        lost: stintRow?.lost ?? 0,
+        position: stintPosition,
+        totalClubs: ALL_CLUB_IDS.length,
+        outcome: 'sacked',
+      },
+    ];
     return {
       status: 'unemployed',
       managerName,
       seasonNumber,
       leagues: [...currentBackgroundLeagues, formerManagedLeagueBg],
       allSquads: currentAllSquads,
+      careerHistory: nextCareerHistory,
     };
   }
 
@@ -866,6 +900,25 @@ export function CareerScreen({
     delete newLeagueManagers[newClubId];
     const newClubLastPlayedMatchday = Math.max(0, ...newClubLeague.fixtures.filter((f) => f.played).map((f) => f.matchday));
 
+    // Not via setCareerHistory — this component unmounts right after
+    // onTakeNewJob, so the NEW club's CareerScreen instance needs the
+    // updated array handed to it directly through the save payload.
+    const nextCareerHistory: CareerHistoryEntry[] = [
+      ...careerHistory,
+      {
+        clubId: club.id,
+        leagueId: managedLeagueId,
+        seasonNumber,
+        played: ownTableRow?.played ?? 0,
+        won: ownTableRow?.won ?? 0,
+        drawn: ownTableRow?.drawn ?? 0,
+        lost: ownTableRow?.lost ?? 0,
+        position: leaguePosition,
+        totalClubs: ALL_CLUB_IDS.length,
+        outcome: 'left',
+      },
+    ];
+
     onTakeNewJob(newClubId, {
       clubId: newClubId,
       leagueId: newClubLeague.leagueId,
@@ -880,6 +933,7 @@ export function CareerScreen({
       managerNews: newClubLeague.managerNews,
       managerApproachState: null,
       managerLastApproachMatchday,
+      careerHistory: nextCareerHistory,
       screen: 'team',
       formationId: DEFAULT_FORMATION_ID,
       selectedXI: [],
@@ -1091,6 +1145,27 @@ export function CareerScreen({
    * ends up in.
    */
   function startNewSeason() {
+    // table/leaguePosition/divisionOutcome all still reflect the season
+    // that just ended — nothing below this point changes what they
+    // evaluate to in this closure, but recorded here for clarity since
+    // it's the one place in this function that reads the OLD season's
+    // state rather than building the new one.
+    setCareerHistory((prev) => [
+      ...prev,
+      {
+        clubId: club.id,
+        leagueId: managedLeagueId,
+        seasonNumber,
+        played: ownTableRow?.played ?? 0,
+        won: ownTableRow?.won ?? 0,
+        drawn: ownTableRow?.drawn ?? 0,
+        lost: ownTableRow?.lost ?? 0,
+        position: leaguePosition,
+        totalClubs: ALL_CLUB_IDS.length,
+        outcome: outcomeForCompletedSeason(leaguePosition, divisionOutcome),
+      },
+    ]);
+
     let squadsAcc = allSquads;
     const resolvedOtherLeagues = backgroundLeagues.map((bg) => {
       if (isBackgroundLeagueSeasonComplete(bg)) return bg;
@@ -1254,6 +1329,7 @@ export function CareerScreen({
         jobSecurity={managerJobSecurity}
         onNavigate={setScreen}
         onChangeClub={onChangeClub}
+        onOpenCareerOverview={() => setShowCareerOverview(true)}
       />
 
       <div hidden={screen !== 'team'}>
@@ -1319,6 +1395,27 @@ export function CareerScreen({
       )}
 
       {overlay && <div className="fixed inset-0 z-50 overflow-y-auto bg-pitch">{overlay}</div>}
+
+      {showCareerOverview && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-pitch">
+          <CareerOverviewScreen
+            managerName={managerName}
+            history={careerHistory}
+            currentStint={{
+              clubId: club.id,
+              leagueId: managedLeagueId,
+              seasonNumber,
+              played: ownTableRow?.played ?? 0,
+              won: ownTableRow?.won ?? 0,
+              drawn: ownTableRow?.drawn ?? 0,
+              lost: ownTableRow?.lost ?? 0,
+              position: leaguePosition,
+              totalClubs: ALL_CLUB_IDS.length,
+            }}
+            onClose={() => setShowCareerOverview(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }

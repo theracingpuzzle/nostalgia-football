@@ -8,6 +8,7 @@ import { MANAGER_STARTING_CONFIDENCE, vacantClubIds } from '../engine';
 import { saveCareer, type EmployedSaveData, type UnemployedSaveData } from '../utils/careerStorage';
 import { advanceUnemployedMatchday, takeOverClub } from '../utils/careerTransition';
 import { vacantManagerBand } from '../utils/managerDisplay';
+import { CareerOverviewScreen } from './CareerOverviewScreen';
 
 /**
  * A genuinely unemployed spell — no managed club at all. Every league
@@ -29,10 +30,18 @@ export function UnemployedScreen({
   const [seasonNumber, setSeasonNumber] = useState(initialSave.seasonNumber);
   const [leagues, setLeagues] = useState(initialSave.leagues);
   const [allSquads, setAllSquads] = useState(initialSave.allSquads);
+  const [showCareerOverview, setShowCareerOverview] = useState(false);
+  // Carried through unchanged — nothing is ever added to it while
+  // unemployed, since no stint is in progress. See CareerScreen's own
+  // careerHistory for where entries actually get appended. Plain state
+  // (not `initialSave.careerHistory ?? []` inline) for the same reason
+  // seasonNumber/leagues/allSquads above are state too: a stable
+  // reference across renders, not a fresh array every time.
+  const [careerHistory] = useState(initialSave.careerHistory ?? []);
 
   useEffect(() => {
-    saveCareer({ status: 'unemployed', managerName: initialSave.managerName, seasonNumber, leagues, allSquads });
-  }, [initialSave.managerName, seasonNumber, leagues, allSquads]);
+    saveCareer({ status: 'unemployed', managerName: initialSave.managerName, seasonNumber, leagues, allSquads, careerHistory });
+  }, [initialSave.managerName, seasonNumber, leagues, allSquads, careerHistory]);
 
   function handleAdvance() {
     const result = advanceUnemployedMatchday(leagues, allSquads);
@@ -61,6 +70,7 @@ export function UnemployedScreen({
       managerNews: newClubLeague.managerNews,
       managerApproachState: null,
       managerLastApproachMatchday: null,
+      careerHistory,
       screen: 'team',
       formationId: DEFAULT_FORMATION_ID,
       selectedXI: [],
@@ -82,7 +92,10 @@ export function UnemployedScreen({
     <div className="mx-auto max-w-3xl p-4 text-white">
       <h2 className="mb-1 text-center text-xl font-black uppercase tracking-wide">Unemployed</h2>
       <p className="mb-3 text-center text-sm text-white/70">
-        {initialSave.managerName} — Season {seasonNumber}. Browse the real vacancies below and apply whenever you're ready — take too long on one and another club might snap it up first.
+        <button onClick={() => setShowCareerOverview(true)} className="underline-offset-2 hover:underline" title="View Career Overview">
+          {initialSave.managerName} — Season {seasonNumber}
+        </button>
+        . Browse the real vacancies below and apply whenever you're ready — take too long on one and another club might snap it up first.
       </p>
 
       {LEAGUES.map((leagueDef) => {
@@ -128,6 +141,12 @@ export function UnemployedScreen({
           {anySeasonInProgress ? 'Advance to Next Matchday' : 'Start Next Season'}
         </Button>
       </div>
+
+      {showCareerOverview && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-pitch">
+          <CareerOverviewScreen managerName={initialSave.managerName} history={careerHistory} currentStint={null} onClose={() => setShowCareerOverview(false)} />
+        </div>
+      )}
     </div>
   );
 }
